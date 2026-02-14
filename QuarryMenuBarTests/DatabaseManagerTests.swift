@@ -23,7 +23,7 @@ struct FailingDatabaseDiscovery: DatabaseDiscovery {
 // MARK: - SlowDatabaseDiscovery
 
 /// Mock that sleeps before returning, useful for testing timeouts and reentrancy.
-final class SlowDatabaseDiscovery: DatabaseDiscovery, @unchecked Sendable {
+actor SlowDatabaseDiscovery: DatabaseDiscovery {
 
     // MARK: Lifecycle
 
@@ -51,7 +51,7 @@ final class SlowDatabaseDiscovery: DatabaseDiscovery, @unchecked Sendable {
 // MARK: - TwoPhaseDiscovery
 
 /// Returns results immediately on first call, then hangs on subsequent calls.
-final class TwoPhaseDiscovery: DatabaseDiscovery, @unchecked Sendable {
+actor TwoPhaseDiscovery: DatabaseDiscovery {
 
     // MARK: Lifecycle
 
@@ -184,7 +184,8 @@ final class DatabaseManagerTests: XCTestCase {
         async let second: Void = manager.loadDatabases()
         _ = await (first, second)
 
-        XCTAssertEqual(slow.callCount, 1)
+        let callCount = await slow.callCount
+        XCTAssertEqual(callCount, 1)
         XCTAssertFalse(manager.isDiscovering)
     }
 
