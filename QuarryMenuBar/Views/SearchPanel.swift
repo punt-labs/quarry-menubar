@@ -113,7 +113,13 @@ struct SearchPanel: View {
                 .listStyle(.plain)
                 .onChange(of: selectedResultID) { _, newID in
                     guard let newID else { return }
-                    proxy.scrollTo(newID, anchor: scrollAnchor)
+                    let ordered = flatResults(from: results)
+                    if newID == ordered.first?.id {
+                        // Scroll to the very top so section header isn't clipped
+                        proxy.scrollTo(sortedKeys.first, anchor: .top)
+                    } else {
+                        proxy.scrollTo(newID, anchor: scrollAnchor)
+                    }
                 }
             }
         case let .empty(query):
