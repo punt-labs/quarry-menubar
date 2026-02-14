@@ -6,10 +6,27 @@ struct QuarryMenuBarApp: App {
     // MARK: Lifecycle
 
     init() {
-        let dbManager = DatabaseManager()
+        let quarryPath = ExecutableResolver.resolve()
+        let dbManager: DatabaseManager
+        if let quarryPath {
+            let discovery = CLIDatabaseDiscovery(
+                executablePath: quarryPath,
+                processArguments: ["databases", "--json"]
+            )
+            dbManager = DatabaseManager(discovery: discovery)
+        } else {
+            dbManager = DatabaseManager()
+        }
         let initialDB = dbManager.currentDatabase
+        _quarryPath = State(initialValue: quarryPath)
         _databaseManager = State(initialValue: dbManager)
-        _daemon = State(initialValue: DaemonManager(databaseName: initialDB))
+        _daemon = State(initialValue: DaemonManager(
+            databaseName: initialDB,
+            executablePath: quarryPath ?? "/usr/bin/env",
+            processArguments: quarryPath != nil
+                ? ["serve", "--db", initialDB]
+                : nil
+        ))
         _searchViewModel = State(initialValue: SearchViewModel(
             client: QuarryClient(databaseName: initialDB)
         ))
@@ -32,6 +49,7 @@ struct QuarryMenuBarApp: App {
 
     // MARK: Private
 
+    @State private var quarryPath: String?
     @State private var databaseManager: DatabaseManager
     @State private var daemon: DaemonManager
     @State private var searchViewModel: SearchViewModel
@@ -52,7 +70,13 @@ struct QuarryMenuBarApp: App {
         daemon.stop()
         searchViewModel.clear()
         databaseManager.selectDatabase(newDatabase)
-        daemon = DaemonManager(databaseName: newDatabase)
+        daemon = DaemonManager(
+            databaseName: newDatabase,
+            executablePath: quarryPath ?? "/usr/bin/env",
+            processArguments: quarryPath != nil
+                ? ["serve", "--db", newDatabase]
+                : nil
+        )
         searchViewModel = SearchViewModel(
             client: QuarryClient(databaseName: newDatabase)
         )
