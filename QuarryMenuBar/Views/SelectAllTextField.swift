@@ -88,17 +88,39 @@ struct SelectAllTextField: NSViewRepresentable {
 
 // MARK: - FocusSelectingTextField
 
-/// NSTextField subclass that auto-focuses and selects all text when added to a window.
+/// NSTextField subclass that selects all text each time its window becomes key.
 ///
-/// `selectText(nil)` both makes the field first responder and selects all text
-/// in a single operation, avoiding the timing issues of separate focus + select calls.
+/// Observes `didBecomeKeyNotification` rather than using `viewDidMoveToWindow`
+/// because SwiftUI calls `updateNSView` after the view is added to the window,
+/// which clears any selection made during setup. The window-key notification
+/// fires after the panel is fully settled, and also re-selects on every panel
+/// open — matching Spotlight's behavior.
 private final class FocusSelectingTextField: NSTextField {
+
+    // MARK: Lifecycle
+
+    deinit {
+        windowObserver.flatMap { NotificationCenter.default.removeObserver($0) }
+    }
+
+    // MARK: Internal
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window != nil {
-            DispatchQueue.main.async { [weak self] in
-                self?.selectText(nil)
-            }
+        windowObserver.flatMap { NotificationCenter.default.removeObserver($0) }
+        windowObserver = nil
+
+        guard let window else { return }
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.selectText(nil)
         }
     }
+
+    // MARK: Private
+
+    private var windowObserver: NSObjectProtocol?
 }
