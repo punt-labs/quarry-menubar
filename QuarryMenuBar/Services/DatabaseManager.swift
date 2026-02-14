@@ -50,6 +50,7 @@ struct CLIDatabaseDiscovery: DatabaseDiscovery {
             guard let colonIndex = trimmed.firstIndex(of: ":") else { return nil }
             let name = String(trimmed[trimmed.startIndex ..< colonIndex])
                 .trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { return nil }
 
             let rest = String(trimmed[trimmed.index(after: colonIndex)...])
                 .trimmingCharacters(in: .whitespaces)

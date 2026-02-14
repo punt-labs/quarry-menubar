@@ -56,6 +56,11 @@ struct QuarryMenuBarApp: App {
         searchViewModel = SearchViewModel(
             client: QuarryClient(databaseName: newDatabase)
         )
-        daemon.start()
+        // Delay mirrors DaemonManager.restart() — lets the old process
+        // and port file clean up before the new daemon binds.
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            daemon.start()
+        }
     }
 }
