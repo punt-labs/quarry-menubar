@@ -19,9 +19,6 @@ struct SearchPanel: View {
                     .animation(.easeInOut(duration: 0.15), value: viewModel.state)
             }
         }
-        .onAppear {
-            isSearchFocused = true
-        }
     }
 
     // MARK: Private
@@ -29,29 +26,17 @@ struct SearchPanel: View {
     private static let emptyStateTopPadding: CGFloat = 40
 
     @State private var selectedResult: SearchResult?
-    @FocusState private var isSearchFocused: Bool
 
     private var searchField: some View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search documents…", text: $viewModel.query)
-                .textFieldStyle(.plain)
-                .font(.body)
-                .focused($isSearchFocused)
-                .onSubmit {
-                    viewModel.search()
-                }
-            if !viewModel.query.isEmpty {
-                Button {
-                    viewModel.clear()
-                    selectedResult = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
+            SelectAllTextField(
+                placeholder: "Search documents…",
+                text: $viewModel.query,
+                onSubmit: { viewModel.search() },
+                onEscape: { handleEscape() }
+            )
         }
         .padding(10)
     }
@@ -156,6 +141,15 @@ struct SearchPanel: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+    }
+
+    private func handleEscape() {
+        if selectedResult != nil {
+            selectedResult = nil
+        } else {
+            viewModel.clear()
+            NSApp.keyWindow?.close()
+        }
     }
 
     private func formatLabel(_ format: String) -> String {
