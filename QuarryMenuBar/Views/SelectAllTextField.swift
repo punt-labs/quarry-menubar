@@ -88,8 +88,18 @@ struct SelectAllTextField: NSViewRepresentable {
 
 // MARK: - FocusSelectingTextField
 
-/// NSTextField subclass that selects all text when it becomes first responder.
+/// NSTextField subclass that auto-focuses when added to a window and selects
+/// all text when it becomes first responder.
 private final class FocusSelectingTextField: NSTextField {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil {
+            DispatchQueue.main.async { [weak self] in
+                self?.window?.makeFirstResponder(self)
+            }
+        }
+    }
+
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
         if result {
