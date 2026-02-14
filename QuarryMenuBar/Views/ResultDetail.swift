@@ -5,35 +5,18 @@ struct ResultDetail: View {
     // MARK: Internal
 
     let result: SearchResult
+    let client: QuarryClient
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 Divider()
-                Text(result.text)
-                    .font(.body)
+                Text(SyntaxHighlighter.highlight(result.text, format: result.sourceFormat, fontSize: 13))
                     .textSelection(.enabled)
                 Spacer()
             }
             .padding(12)
-        }
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    copyText()
-                } label: {
-                    Label("Copy Text", systemImage: "doc.on.doc")
-                }
-                .help("Copy text to clipboard")
-
-                Button {
-                    revealInFinder()
-                } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
-                }
-                .help("Reveal source file in Finder")
-            }
         }
     }
 
@@ -48,26 +31,28 @@ struct ResultDetail: View {
                     .font(.caption)
                 Label(result.collection, systemImage: "folder")
                     .font(.caption)
-                Label(String(format: "%.0f%% match", result.similarity * 100), systemImage: "target")
-                    .font(.caption)
-                    .monospacedDigit()
+                    .onTapGesture {
+                        Task { await revealInFinder() }
+                    }
+                    .help("Reveal source file in Finder")
             }
             .foregroundStyle(.secondary)
         }
     }
 
-    private func copyText() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(result.text, forType: .string)
-    }
-
-    private func revealInFinder() {
-        // The document path would come from the documents endpoint.
-        // For now, construct a likely path from the quarry data directory.
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let dataDir = home
-            .appendingPathComponent(".quarry")
-            .appendingPathComponent("data")
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dataDir.path)
+    private func revealInFinder() async {
+        do {
+            let docs = try await client.documents(collection: result.collection)
+            if let info = docs.documents.first(where: { $0.documentName == result.documentName }) {
+                let url = URL(fileURLWithPath: info.documentPath)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+                NSApp.hide(nil)
+            }
+        } catch {
+            // Fall back to opening the quarry data directory
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            let dataDir = home.appendingPathComponent(".quarry").appendingPathComponent("data")
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dataDir.path)
+        }
     }
 }

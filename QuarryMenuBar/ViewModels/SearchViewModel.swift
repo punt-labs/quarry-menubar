@@ -45,6 +45,8 @@ final class SearchViewModel {
 
     private(set) var state: SearchState = .idle
 
+    let client: QuarryClient
+
     var query: String = "" {
         didSet {
             debounceSearch()
@@ -89,7 +91,6 @@ final class SearchViewModel {
 
     private static let debounceInterval: Duration = .milliseconds(300)
 
-    private let client: QuarryClient
     private var searchTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private let logger = Logger(subsystem: "com.puntlabs.quarry-menubar", category: "SearchViewModel")

@@ -13,16 +13,20 @@ struct SearchPanel: View {
             if let selected = selectedResult {
                 detailHeader(for: selected)
                 Divider()
-                ResultDetail(result: selected)
+                ResultDetail(result: selected, client: viewModel.client)
             } else {
                 resultsList
             }
+        }
+        .onAppear {
+            isSearchFocused = true
         }
     }
 
     // MARK: Private
 
     @State private var selectedResult: SearchResult?
+    @FocusState private var isSearchFocused: Bool
 
     private var searchField: some View {
         HStack {
@@ -31,6 +35,7 @@ struct SearchPanel: View {
             TextField("Search documents…", text: $viewModel.query)
                 .textFieldStyle(.plain)
                 .font(.body)
+                .focused($isSearchFocused)
                 .onSubmit {
                     viewModel.search()
                 }
@@ -52,11 +57,14 @@ struct SearchPanel: View {
     private var resultsList: some View {
         switch viewModel.state {
         case .idle:
-            ContentUnavailableView(
-                "Search Your Documents",
-                systemImage: "text.magnifyingglass",
-                description: Text("Type a query to search across all indexed documents.")
-            )
+            VStack {
+                Text("Type a query to search across all indexed documents.")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 24)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
         case .loading:
             VStack {
                 Spacer()
@@ -64,12 +72,20 @@ struct SearchPanel: View {
                 Spacer()
             }
         case let .results(results):
-            List(results) { result in
-                ResultRow(result: result)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        selectedResult = result
+            let grouped = Dictionary(grouping: results, by: \.sourceFormat)
+            let sortedKeys = grouped.keys.sorted()
+            List {
+                ForEach(sortedKeys, id: \.self) { format in
+                    Section(formatLabel(format)) {
+                        ForEach(grouped[format] ?? []) { result in
+                            ResultRow(result: result)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedResult = result
+                                }
+                        }
                     }
+                }
             }
             .listStyle(.plain)
         case let .empty(query):
@@ -108,6 +124,18 @@ struct SearchPanel: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+    }
+
+    private func formatLabel(_ format: String) -> String {
+        switch format {
+        case ".py": "Python"
+        case ".md": "Markdown"
+        case ".pdf": "PDF Documents"
+        case ".txt": "Text Files"
+        case ".tex": "LaTeX"
+        case ".docx": "Word Documents"
+        default: format.uppercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        }
     }
 
 }
