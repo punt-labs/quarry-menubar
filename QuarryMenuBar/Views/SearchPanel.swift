@@ -29,6 +29,7 @@ struct SearchPanel: View {
     private static let emptyStateTopPadding: CGFloat = 40
 
     @State private var selectedResult: SearchResult?
+    @State private var selectedResultID: SearchResult.ID?
     @FocusState private var isSearchFocused: Bool
 
     private var searchField: some View {
@@ -71,7 +72,7 @@ struct SearchPanel: View {
         case let .results(results):
             let grouped = Dictionary(grouping: results, by: \.sourceFormat)
             let sortedKeys = grouped.keys.sorted()
-            List {
+            List(selection: $selectedResultID) {
                 ForEach(sortedKeys, id: \.self) { format in
                     Section {
                         ForEach(grouped[format] ?? []) { result in
@@ -81,10 +82,6 @@ struct SearchPanel: View {
                             }
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedResult = result
-                            }
                         }
                     } header: {
                         Text(formatLabel(format))
@@ -95,6 +92,11 @@ struct SearchPanel: View {
                 }
             }
             .listStyle(.plain)
+            .onChange(of: selectedResultID) { _, newID in
+                guard let newID else { return }
+                selectedResult = results.first { $0.id == newID }
+                selectedResultID = nil
+            }
         case let .empty(query):
             VStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
