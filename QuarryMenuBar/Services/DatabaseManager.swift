@@ -81,6 +81,7 @@ struct CLIDatabaseDiscovery: DatabaseDiscovery {
 
 enum DatabaseManagerError: LocalizedError {
     case discoveryFailed(String)
+    case discoveryTimedOut
 
     // MARK: Internal
 
@@ -88,6 +89,8 @@ enum DatabaseManagerError: LocalizedError {
         switch self {
         case let .discoveryFailed(message):
             "Database discovery failed: \(message)"
+        case .discoveryTimedOut:
+            "Database discovery timed out"
         }
     }
 }
@@ -103,10 +106,12 @@ final class DatabaseManager {
 
     init(
         discovery: DatabaseDiscovery = CLIDatabaseDiscovery(),
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        discoveryTimeout: Duration = .seconds(5)
     ) {
         self.discovery = discovery
         self.userDefaults = userDefaults
+        self.discoveryTimeout = discoveryTimeout
         currentDatabase = userDefaults.string(forKey: Self.selectedDatabaseKey) ?? "default"
     }
 
@@ -114,6 +119,7 @@ final class DatabaseManager {
 
     private(set) var availableDatabases: [DatabaseInfo] = []
     private(set) var isDiscovering = false
+    private(set) var discoveryTimedOut = false
 
     private(set) var currentDatabase: String {
         didSet {
@@ -122,15 +128,36 @@ final class DatabaseManager {
     }
 
     func loadDatabases() async {
+        guard !isDiscovering else { return }
         isDiscovering = true
+        discoveryTimedOut = false
         defer { isDiscovering = false }
 
+        let timeout = discoveryTimeout
         do {
-            let discovered = try await discovery.discoverDatabases()
+            let discovered = try await withThrowingTaskGroup(of: [DatabaseInfo].self) { group in
+                group.addTask {
+                    try await self.discovery.discoverDatabases()
+                }
+                group.addTask {
+                    try await Task.sleep(for: timeout)
+                    throw DatabaseManagerError.discoveryTimedOut
+                }
+                guard let result = try await group.next() else {
+                    throw DatabaseManagerError.discoveryFailed("No discovery result")
+                }
+                group.cancelAll()
+                return result
+            }
             availableDatabases = discovered
             logger.info("Discovered \(discovered.count) databases")
         } catch {
-            logger.error("Discovery failed: \(error)")
+            if case DatabaseManagerError.discoveryTimedOut = error {
+                discoveryTimedOut = true
+                logger.warning("Database discovery timed out after \(timeout)")
+            } else {
+                logger.error("Discovery failed: \(error)")
+            }
             // Keep existing list; UI can still show what we had
         }
     }
@@ -146,6 +173,7 @@ final class DatabaseManager {
     private static let selectedDatabaseKey = "com.puntlabs.quarry-menubar.selectedDatabase"
 
     private let discovery: DatabaseDiscovery
+    private let discoveryTimeout: Duration
     private let userDefaults: UserDefaults
     private let logger = Logger(subsystem: "com.puntlabs.quarry-menubar", category: "DatabaseManager")
 }

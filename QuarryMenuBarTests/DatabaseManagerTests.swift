@@ -20,6 +20,64 @@ struct FailingDatabaseDiscovery: DatabaseDiscovery {
     }
 }
 
+// MARK: - SlowDatabaseDiscovery
+
+/// Mock that sleeps before returning, useful for testing timeouts and reentrancy.
+final class SlowDatabaseDiscovery: DatabaseDiscovery, @unchecked Sendable {
+
+    // MARK: Lifecycle
+
+    init(delay: Duration, databases: [DatabaseInfo] = []) {
+        self.delay = delay
+        self.databases = databases
+    }
+
+    // MARK: Internal
+
+    private(set) var callCount = 0
+
+    func discoverDatabases() async throws -> [DatabaseInfo] {
+        callCount += 1
+        try await Task.sleep(for: delay)
+        return databases
+    }
+
+    // MARK: Private
+
+    private let delay: Duration
+    private let databases: [DatabaseInfo]
+}
+
+// MARK: - TwoPhaseDiscovery
+
+/// Returns results immediately on first call, then hangs on subsequent calls.
+final class TwoPhaseDiscovery: DatabaseDiscovery, @unchecked Sendable {
+
+    // MARK: Lifecycle
+
+    init(firstResult: [DatabaseInfo], subsequentDelay: Duration) {
+        self.firstResult = firstResult
+        self.subsequentDelay = subsequentDelay
+    }
+
+    // MARK: Internal
+
+    func discoverDatabases() async throws -> [DatabaseInfo] {
+        callCount += 1
+        if callCount == 1 {
+            return firstResult
+        }
+        try await Task.sleep(for: subsequentDelay)
+        return []
+    }
+
+    // MARK: Private
+
+    private var callCount = 0
+    private let firstResult: [DatabaseInfo]
+    private let subsequentDelay: Duration
+}
+
 // MARK: - DatabaseManagerTests
 
 @MainActor
@@ -113,6 +171,73 @@ final class DatabaseManagerTests: XCTestCase {
         await manager.loadDatabases()
         // After completion, isDiscovering is false
         XCTAssertFalse(manager.isDiscovering)
+    }
+
+    func testReentrancyGuardPreventsSecondDiscovery() async {
+        let slow = SlowDatabaseDiscovery(delay: .milliseconds(200))
+        let manager = DatabaseManager(
+            discovery: slow,
+            userDefaults: defaults
+        )
+
+        async let first: Void = manager.loadDatabases()
+        async let second: Void = manager.loadDatabases()
+        _ = await (first, second)
+
+        XCTAssertEqual(slow.callCount, 1)
+        XCTAssertFalse(manager.isDiscovering)
+    }
+
+    func testDiscoveryTimeoutSetsFlag() async {
+        let manager = DatabaseManager(
+            discovery: SlowDatabaseDiscovery(delay: .seconds(10)),
+            userDefaults: defaults,
+            discoveryTimeout: .milliseconds(100)
+        )
+
+        await manager.loadDatabases()
+
+        XCTAssertTrue(manager.discoveryTimedOut)
+        XCTAssertFalse(manager.isDiscovering)
+        XCTAssertTrue(manager.availableDatabases.isEmpty)
+    }
+
+    func testSuccessfulDiscoveryDoesNotSetTimedOut() async {
+        let mockDBs = [
+            DatabaseInfo(name: "test", documentCount: 1, sizeBytes: 100, sizeDescription: "100 bytes")
+        ]
+        let manager = DatabaseManager(
+            discovery: MockDatabaseDiscovery(databases: mockDBs),
+            userDefaults: defaults
+        )
+
+        await manager.loadDatabases()
+
+        XCTAssertFalse(manager.discoveryTimedOut)
+        XCTAssertEqual(manager.availableDatabases.count, 1)
+    }
+
+    func testTimeoutPreservesExistingDatabases() async {
+        let mockDBs = [
+            DatabaseInfo(name: "cached", documentCount: 5, sizeBytes: 500, sizeDescription: "500 bytes")
+        ]
+        let discovery = TwoPhaseDiscovery(firstResult: mockDBs, subsequentDelay: .seconds(10))
+        let manager = DatabaseManager(
+            discovery: discovery,
+            userDefaults: defaults,
+            discoveryTimeout: .milliseconds(100)
+        )
+
+        // First load succeeds (returns immediately)
+        await manager.loadDatabases()
+        XCTAssertEqual(manager.availableDatabases.count, 1)
+        XCTAssertFalse(manager.discoveryTimedOut)
+
+        // Second load times out — cached data preserved
+        await manager.loadDatabases()
+        XCTAssertTrue(manager.discoveryTimedOut)
+        XCTAssertEqual(manager.availableDatabases.count, 1)
+        XCTAssertEqual(manager.availableDatabases[0].name, "cached")
     }
 
     // MARK: Private

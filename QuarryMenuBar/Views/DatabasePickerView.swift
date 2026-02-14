@@ -14,6 +14,9 @@ struct DatabasePickerView: View {
             if databaseManager.isDiscovering {
                 Text("Loading…")
                     .foregroundStyle(.secondary)
+            } else if databaseManager.discoveryTimedOut, databaseManager.availableDatabases.isEmpty {
+                Text("Discovery timed out")
+                    .foregroundStyle(.secondary)
             } else if databaseManager.availableDatabases.isEmpty {
                 Text("No databases found")
                     .foregroundStyle(.secondary)
