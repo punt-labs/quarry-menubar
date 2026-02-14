@@ -16,15 +16,10 @@ struct ResultRow: View {
                     .foregroundStyle(.tertiary)
             }
 
-            Text(SyntaxHighlighter.highlight(result.text, format: result.sourceFormat, fontSize: 11))
-                .lineLimit(3)
-
-            Text(result.collection)
-                .font(.caption2)
+            Text(result.text.prefix(200))
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.quaternary, in: Capsule())
+                .lineLimit(2)
         }
         .padding(.vertical, 4)
     }
