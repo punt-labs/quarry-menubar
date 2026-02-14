@@ -5,7 +5,7 @@ SCHEME = QuarryMenuBar
 DESTINATION = platform=macOS
 DERIVED_DATA = ./DerivedData
 
-.PHONY: help generate build test clean lint format all version bump-patch bump-minor bump-major bump-build
+.PHONY: help generate build test clean lint format all run version bump-patch bump-minor bump-major bump-build
 
 help:
 	@echo "Available commands:"
@@ -18,6 +18,7 @@ help:
 	@echo "    make test        - Run unit tests"
 	@echo "    make coverage    - Run tests with code coverage report"
 	@echo "    make clean       - Clean build artifacts"
+	@echo "    make run         - Build and launch the menu bar app"
 	@echo "    make all         - Generate, format, lint, build, and test"
 	@echo ""
 	@echo "  Versioning:"
@@ -90,6 +91,10 @@ coverage: generate
 		targets=[t for t in d.get('targets',[]) if t.get('name')=='QuarryMenuBar.app']; \
 		cov=targets[0].get('lineCoverage',0)*100 if targets else 0; \
 		print(f'Line Coverage: {cov:.1f}%')" 2>/dev/null || echo "Could not parse coverage report."
+
+run: build
+	@echo "Launching $(SCHEME)..."
+	@open $(DERIVED_DATA)/Build/Products/Debug/QuarryMenuBar.app
 
 all: generate format lint build test
 	@echo "All steps complete."

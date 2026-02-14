@@ -12,7 +12,7 @@ enum ExecutableResolver {
         return [
             "\(home)/.local/bin/quarry",
             "/usr/local/bin/quarry",
-            "/opt/homebrew/bin/quarry",
+            "/opt/homebrew/bin/quarry"
         ]
     }()
 

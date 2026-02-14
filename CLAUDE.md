@@ -307,12 +307,28 @@ git status                  # Must show "up to date with origin"
 
 Work is NOT complete until `git push` succeeds.
 
+### Executable Resolution
+
+GUI apps don't inherit the shell's PATH, so `/usr/bin/env quarry` fails at runtime. `ExecutableResolver` searches well-known install locations at startup:
+
+1. `~/.local/bin/quarry` (uv tool install)
+2. `/usr/local/bin/quarry`
+3. `/opt/homebrew/bin/quarry`
+
+The resolved path is passed to both `DaemonManager` and `CLIDatabaseDiscovery`. If quarry isn't found at any known location, the app falls back to `/usr/bin/env` (will only work if PATH is set, e.g. when launched from a terminal).
+
+To add a new search path, edit `ExecutableResolver.searchPaths`.
+
 ### Testing Against Live Backend
 
-The app manages its own `quarry serve` subprocess, but for development testing you may need to point at a specific quarry binary or database:
+```bash
+make run    # Build and launch the app
+```
 
-1. Modify `QuarryMenuBarApp.swift` to use explicit paths (e.g., `executablePath: "/path/to/quarry"`, `databaseName: "demo"`)
-2. Build and launch: `make build && open DerivedData/Build/Products/Debug/QuarryMenuBar.app`
-3. **Revert the hardcoded paths before committing** — production defaults use `DaemonManager()` and `SearchViewModel()` with no arguments
+The app auto-starts `quarry serve` for the persisted database (default: "default"). To test with a specific database, switch via the database picker in the menu bar header — no code changes needed.
 
-The default executable path is `/usr/bin/env quarry` which requires `quarry` to be on `$PATH`. The published `quarry-mcp` package does not include `serve` — only the dev install (`../ocr/.venv/bin/quarry`) has it.
+**Prerequisite**: `quarry` must be installed with `serve` and `databases` commands. Install from the parent project:
+
+```bash
+cd ../ocr && uv tool install --force .
+```
