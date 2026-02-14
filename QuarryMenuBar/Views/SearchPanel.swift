@@ -84,30 +84,37 @@ struct SearchPanel: View {
         case let .results(results):
             let grouped = Dictionary(grouping: results, by: \.sourceFormat)
             let sortedKeys = grouped.keys.sorted()
-            List(selection: $selectedResultID) {
-                ForEach(sortedKeys, id: \.self) { format in
-                    Section {
-                        ForEach(grouped[format] ?? []) { result in
-                            VStack(spacing: 0) {
-                                ResultRow(result: result)
-                                Divider()
+            ScrollViewReader { proxy in
+                List(selection: $selectedResultID) {
+                    ForEach(sortedKeys, id: \.self) { format in
+                        Section {
+                            ForEach(grouped[format] ?? []) { result in
+                                VStack(spacing: 0) {
+                                    ResultRow(result: result)
+                                    Divider()
+                                }
+                                .id(result.id)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedResult = result
+                                }
                             }
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedResult = result
-                            }
+                        } header: {
+                            Text(formatLabel(format))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textCase(nil)
                         }
-                    } header: {
-                        Text(formatLabel(format))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textCase(nil)
                     }
                 }
+                .listStyle(.plain)
+                .onChange(of: selectedResultID) { _, newID in
+                    guard let newID else { return }
+                    proxy.scrollTo(newID, anchor: nil)
+                }
             }
-            .listStyle(.plain)
         case let .empty(query):
             VStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
