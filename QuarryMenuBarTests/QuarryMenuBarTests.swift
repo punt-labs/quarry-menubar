@@ -6,7 +6,12 @@ final class ContentPanelTests: XCTestCase {
     func testContentPanelInitializesWithDaemon() {
         let daemon = DaemonManager(executablePath: "/nonexistent")
         let viewModel = SearchViewModel()
-        let panel = ContentPanel(daemon: daemon, searchViewModel: viewModel)
+        let panel = ContentPanel(
+            daemon: daemon,
+            searchViewModel: viewModel,
+            databaseManager: DatabaseManager(),
+            onDatabaseSwitch: { _ in }
+        )
         XCTAssertNotNil(panel.body)
     }
 
