@@ -66,26 +66,32 @@ struct ContentPanel: View {
     @ViewBuilder
     private var statusContent: some View {
         switch daemon.state {
-        case .stopped,
-             .starting:
+        case .stopped:
             ContentUnavailableView(
-                "Starting Quarry…",
-                systemImage: "gear",
-                description: Text("Launching the search backend.")
+                "Backend Stopped",
+                systemImage: "stop.circle",
+                description: Text("The search backend is not running.")
             )
+            Button("Start") {
+                daemon.start()
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.bottom, 8)
+        case .starting:
+            VStack {
+                Spacer()
+                ProgressView("Starting Quarry…")
+                Text("Launching the search backend.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+                Spacer()
+            }
         case .running:
             SearchPanel(viewModel: searchViewModel)
         case let .error(message):
-            VStack(spacing: 12) {
-                ContentUnavailableView(
-                    "Backend Error",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(message)
-                )
-                Button("Restart") {
-                    daemon.restart()
-                }
-                .buttonStyle(.borderedProminent)
+            ErrorStateView(message: message) {
+                daemon.restart()
             }
         }
     }
