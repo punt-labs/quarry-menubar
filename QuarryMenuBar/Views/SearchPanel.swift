@@ -82,11 +82,16 @@ struct SearchPanel: View {
                 ForEach(sortedKeys, id: \.self) { format in
                     Section {
                         ForEach(grouped[format] ?? []) { result in
-                            ResultRow(result: result)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedResult = result
-                                }
+                            VStack(spacing: 0) {
+                                ResultRow(result: result)
+                                Divider()
+                            }
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedResult = result
+                            }
                         }
                     } header: {
                         Text(formatLabel(format))
@@ -97,7 +102,6 @@ struct SearchPanel: View {
                 }
             }
             .listStyle(.plain)
-            .listRowSeparator(.visible)
         case let .empty(query):
             VStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
