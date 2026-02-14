@@ -16,6 +16,7 @@ struct SearchPanel: View {
                 ResultDetail(result: selected, client: viewModel.client)
             } else {
                 resultsList
+                    .animation(.easeInOut(duration: 0.15), value: viewModel.state)
             }
         }
         .onAppear {
@@ -61,16 +62,17 @@ struct SearchPanel: View {
                 Text("Type a query to search across all indexed documents.")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
-                    .padding(.top, 24)
+                    .padding(.top, 40)
                 Spacer()
             }
             .frame(maxWidth: .infinity)
         case .loading:
-            VStack {
-                Spacer()
+            VStack(alignment: .center, spacing: 8) {
                 ProgressView("Searching…")
-                Spacer()
             }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 40)
+            Spacer()
         case let .results(results):
             let grouped = Dictionary(grouping: results, by: \.sourceFormat)
             let sortedKeys = grouped.keys.sorted()
@@ -89,17 +91,35 @@ struct SearchPanel: View {
             }
             .listStyle(.plain)
         case let .empty(query):
-            ContentUnavailableView(
-                "No Results",
-                systemImage: "magnifyingglass",
-                description: Text("No documents matched \"\(query)\".")
-            )
+            VStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.tertiary)
+                Text("No Results")
+                    .font(.headline)
+                Text("No documents matched \"\(query)\".")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 40)
+            Spacer()
         case let .error(message):
-            ContentUnavailableView(
-                "Search Error",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
+            VStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.red)
+                Text("Search Error")
+                    .font(.headline)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 40)
+            Spacer()
         }
     }
 
