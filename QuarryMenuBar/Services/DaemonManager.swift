@@ -79,6 +79,8 @@ final class DaemonManager {
     }
 
     func stop() {
+        healthTask?.cancel()
+        healthTask = nil
         guard let proc = process, proc.isRunning else {
             state = .stopped
             process = nil

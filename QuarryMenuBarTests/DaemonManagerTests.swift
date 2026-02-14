@@ -27,8 +27,9 @@ final class DaemonManagerTests: XCTestCase {
     func testStartGuardsAgainstDoubleStart() {
         let manager = DaemonManager(
             executablePath: "/bin/sleep",
-            processArguments: ["60"]
+            processArguments: ["5"]
         )
+        addTeardownBlock { manager.stop() }
         manager.start()
         let stateAfterFirstStart = manager.state
         manager.start() // Should be a no-op since already running

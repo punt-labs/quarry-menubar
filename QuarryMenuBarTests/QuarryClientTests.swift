@@ -209,7 +209,6 @@ final class QuarryClientNetworkTests: XCTestCase {
             withIntermediateDirectories: true
         )
         let portFile = dbDir.appendingPathComponent("serve.port")
-        portFileURL = portFile
         try? "9999".write(to: portFile, atomically: true, encoding: .utf8)
     }
 
@@ -312,14 +311,6 @@ final class QuarryClientNetworkTests: XCTestCase {
 
     // MARK: Private
 
-    private var client: QuarryClient?
-    private var portFileURL: URL?
     private var tempDir: URL?
-
-    /// Create a client that reads from our temp port file instead of ~/.quarry
-    private func makeClient() -> QuarryClient {
-        // We use the real client but with a custom URLSession
-        QuarryClient(databaseName: "test-db", session: mockSession())
-    }
 
 }

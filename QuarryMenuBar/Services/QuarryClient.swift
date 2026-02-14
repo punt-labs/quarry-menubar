@@ -81,20 +81,20 @@ final class QuarryClient: Sendable {
         try await get("/status")
     }
 
+    // MARK: Private
+
+    private let session: URLSession
+    private let databaseName: String
+
     // MARK: - Port Discovery
 
-    func resolveBaseURL() throws -> URL {
+    private func resolveBaseURL() throws -> URL {
         let port = try readPort()
         guard let url = URL(string: "http://127.0.0.1:\(port)") else {
             throw QuarryClientError.invalidURL("http://127.0.0.1:\(port)")
         }
         return url
     }
-
-    // MARK: Private
-
-    private let session: URLSession
-    private let databaseName: String
 
     private func readPort() throws -> Int {
         let portFile = quarryDataPath()
