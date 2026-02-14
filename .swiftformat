@@ -1,0 +1,42 @@
+# SwiftFormat configuration for Quarry Menu Bar
+
+# Swift version
+--swiftversion 5.9
+
+# Formatting options
+--indent 4
+--indentcase false
+--trimwhitespace always
+--voidtype void
+--maxwidth 120
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--wrapconditions after-first
+--closingparen balanced
+--allman false
+--funcattributes prev-line
+--typeattributes prev-line
+--varattributes prev-line
+--self remove
+--importgrouping alpha
+--semicolons never
+--commas inline
+--stripunusedargs closure-only
+
+# Enable/disable rules
+--enable isEmpty
+--enable sortedImports
+--enable wrapEnumCases
+--enable wrapSwitchCases
+--enable markTypes
+--enable organizeDeclarations
+
+--disable redundantReturn
+--disable blankLinesAtEndOfScope
+--disable blankLinesAtStartOfScope
+--disable trailingCommas
+--disable wrapMultilineStatementBraces
+
+# Exclusions
+--exclude DerivedData,.build,build
