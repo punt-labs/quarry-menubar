@@ -77,8 +77,8 @@ final class DatabaseManagerTests: XCTestCase {
 
     func testLoadDatabasesPopulatesAvailableDatabases() async {
         let mockDBs = [
-            DatabaseInfo(name: "demo", documentCount: 28, sizeDescription: "2.7 MB"),
-            DatabaseInfo(name: "courses", documentCount: 0, sizeDescription: "0.0 KB")
+            DatabaseInfo(name: "demo", documentCount: 28, sizeBytes: 2_831_155, sizeDescription: "2.7 MB"),
+            DatabaseInfo(name: "courses", documentCount: 0, sizeBytes: 0, sizeDescription: "0 bytes")
         ]
         let manager = DatabaseManager(
             discovery: MockDatabaseDiscovery(databases: mockDBs),
@@ -121,62 +121,48 @@ final class DatabaseManagerTests: XCTestCase {
     private var defaults: UserDefaults = .standard
 }
 
-// MARK: - CLIDatabaseDiscoveryParseTests
+// MARK: - DatabaseInfoDecodingTests
 
-final class CLIDatabaseDiscoveryParseTests: XCTestCase {
+final class DatabaseInfoDecodingTests: XCTestCase {
 
-    // MARK: Internal
-
-    func testParseSingleDatabase() {
-        let output = "demo: 28 documents, 2.7 MB\n"
-        let results = parseCLIOutput(output)
+    func testDecodeSingleDatabase() throws {
+        let json = """
+        [{"name": "demo", "document_count": 28, "size_bytes": 2831155, "size_description": "2.7 MB"}]
+        """
+        let results = try decode(json)
         XCTAssertEqual(results.count, 1)
         XCTAssertEqual(results[0].name, "demo")
         XCTAssertEqual(results[0].documentCount, 28)
+        XCTAssertEqual(results[0].sizeBytes, 2_831_155)
         XCTAssertEqual(results[0].sizeDescription, "2.7 MB")
     }
 
-    func testParseMultipleDatabases() {
-        let output = """
-        demo: 28 documents, 2.7 MB
-        courses: 0 documents, 0.0 KB
+    func testDecodeMultipleDatabases() throws {
+        let json = """
+        [
+          {"name": "demo", "document_count": 28, "size_bytes": 2831155, "size_description": "2.7 MB"},
+          {"name": "courses", "document_count": 0, "size_bytes": 0, "size_description": "0 bytes"}
+        ]
         """
-        let results = parseCLIOutput(output)
+        let results = try decode(json)
         XCTAssertEqual(results.count, 2)
         XCTAssertEqual(results[0].name, "demo")
         XCTAssertEqual(results[1].name, "courses")
         XCTAssertEqual(results[1].documentCount, 0)
-        XCTAssertEqual(results[1].sizeDescription, "0.0 KB")
+        XCTAssertEqual(results[1].sizeBytes, 0)
     }
 
-    func testParseSingularDocument() {
-        let output = "single: 1 document, 0.1 MB\n"
-        let results = parseCLIOutput(output)
-        XCTAssertEqual(results.count, 1)
-        XCTAssertEqual(results[0].documentCount, 1)
-    }
-
-    func testParseEmptyOutput() {
-        let results = parseCLIOutput("")
+    func testDecodeEmptyArray() throws {
+        let results = try decode("[]")
         XCTAssertTrue(results.isEmpty)
-    }
-
-    func testParseBlankLines() {
-        let output = "\n\n  \n"
-        let results = parseCLIOutput(output)
-        XCTAssertTrue(results.isEmpty)
-    }
-
-    func testParseMalformedLineSkipped() {
-        let output = "no colon here\ndemo: 28 documents, 2.7 MB\n"
-        let results = parseCLIOutput(output)
-        XCTAssertEqual(results.count, 1)
-        XCTAssertEqual(results[0].name, "demo")
     }
 
     // MARK: Private
 
-    private func parseCLIOutput(_ output: String) -> [DatabaseInfo] {
-        CLIDatabaseDiscovery.parse(output)
+    private func decode(_ json: String) throws -> [DatabaseInfo] {
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode([DatabaseInfo].self, from: data)
     }
 }
