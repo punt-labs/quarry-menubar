@@ -7,7 +7,7 @@ struct QuarryMenuBarApp: App {
 
     var body: some Scene {
         MenuBarExtra("Quarry", systemImage: statusBarIcon) {
-            ContentPanel(daemon: daemon)
+            ContentPanel(daemon: daemon, searchViewModel: searchViewModel)
                 .frame(width: 400, height: 500)
         }
         .menuBarExtraStyle(.window)
@@ -16,6 +16,7 @@ struct QuarryMenuBarApp: App {
     // MARK: Private
 
     @State private var daemon = DaemonManager()
+    @State private var searchViewModel = SearchViewModel()
 
     private var statusBarIcon: String {
         switch daemon.state {

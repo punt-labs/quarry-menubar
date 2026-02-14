@@ -10,12 +10,13 @@ struct ContentPanel: View {
 
     let daemon: DaemonManager
 
+    @Bindable var searchViewModel: SearchViewModel
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             statusContent
-            Spacer()
             Divider()
             footer
         }
@@ -73,12 +74,7 @@ struct ContentPanel: View {
                 description: Text("Launching the search backend.")
             )
         case .running:
-            // Placeholder — SearchPanel replaces this in quarry-4f4
-            ContentUnavailableView(
-                "Ready to Search",
-                systemImage: "magnifyingglass",
-                description: Text("Search panel coming soon.")
-            )
+            SearchPanel(viewModel: searchViewModel)
         case let .error(message):
             VStack(spacing: 12) {
                 ContentUnavailableView(
