@@ -80,14 +80,24 @@ struct SearchPanel: View {
             let sortedKeys = grouped.keys.sorted()
             List {
                 ForEach(sortedKeys, id: \.self) { format in
-                    Section(formatLabel(format)) {
+                    Section {
                         ForEach(grouped[format] ?? []) { result in
-                            ResultRow(result: result)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedResult = result
-                                }
+                            VStack(spacing: 0) {
+                                ResultRow(result: result)
+                                Divider()
+                            }
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedResult = result
+                            }
                         }
+                    } header: {
+                        Text(formatLabel(format))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
                     }
                 }
             }
