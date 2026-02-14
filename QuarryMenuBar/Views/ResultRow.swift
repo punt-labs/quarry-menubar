@@ -16,7 +16,7 @@ struct ResultRow: View {
                     .foregroundStyle(.tertiary)
             }
 
-            Text(result.text.prefix(200))
+            Text(String(result.text.prefix(200)))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
