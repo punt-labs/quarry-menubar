@@ -10,11 +10,19 @@ struct SearchPanel: View {
         VStack(spacing: 0) {
             searchField
             Divider()
-            resultsList
+            if let selected = selectedResult {
+                detailHeader(for: selected)
+                Divider()
+                ResultDetail(result: selected)
+            } else {
+                resultsList
+            }
         }
     }
 
     // MARK: Private
+
+    @State private var selectedResult: SearchResult?
 
     private var searchField: some View {
         HStack {
@@ -29,6 +37,7 @@ struct SearchPanel: View {
             if !viewModel.query.isEmpty {
                 Button {
                     viewModel.clear()
+                    selectedResult = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -57,6 +66,10 @@ struct SearchPanel: View {
         case let .results(results):
             List(results) { result in
                 ResultRow(result: result)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedResult = result
+                    }
             }
             .listStyle(.plain)
         case let .empty(query):
@@ -73,4 +86,28 @@ struct SearchPanel: View {
             )
         }
     }
+
+    private func detailHeader(for result: SearchResult) -> some View {
+        HStack {
+            Button {
+                selectedResult = nil
+            } label: {
+                Label("Back", systemImage: "chevron.left")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            Spacer()
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(result.text, forType: .string)
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
 }
