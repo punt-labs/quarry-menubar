@@ -12,6 +12,9 @@ struct ContentPanel: View {
 
     @Bindable var searchViewModel: SearchViewModel
 
+    let databaseManager: DatabaseManager
+    let onDatabaseSwitch: (String) -> Void
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -33,6 +36,10 @@ struct ContentPanel: View {
                 .foregroundStyle(.secondary)
             Text("Quarry")
                 .font(.headline)
+            DatabasePickerView(
+                databaseManager: databaseManager,
+                onSwitch: onDatabaseSwitch
+            )
             Spacer()
             statusBadge
         }
