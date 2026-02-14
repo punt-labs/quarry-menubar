@@ -3,10 +3,11 @@ import os
 
 // MARK: - DatabaseInfo
 
-struct DatabaseInfo: Sendable, Identifiable, Equatable {
+struct DatabaseInfo: Sendable, Identifiable, Equatable, Decodable {
 
     let name: String
     let documentCount: Int
+    let sizeBytes: Int
     let sizeDescription: String
 
     var id: String {
@@ -23,9 +24,7 @@ protocol DatabaseDiscovery: Sendable {
 
 // MARK: - CLIDatabaseDiscovery
 
-/// Runs `quarry databases` and parses the human-readable output.
-///
-/// Output format: `name: N documents, X.X MB` (one line per database).
+/// Runs `quarry databases --json` and decodes the JSON output.
 struct CLIDatabaseDiscovery: DatabaseDiscovery {
 
     // MARK: Lifecycle
@@ -35,43 +34,10 @@ struct CLIDatabaseDiscovery: DatabaseDiscovery {
         processArguments: [String]? = nil
     ) {
         self.executablePath = executablePath
-        self.processArguments = processArguments ?? ["quarry", "databases"]
+        self.processArguments = processArguments ?? ["quarry", "databases", "--json"]
     }
 
     // MARK: Internal
-
-    /// Parse lines matching `name: N documents, size`.
-    static func parse(_ output: String) -> [DatabaseInfo] {
-        output.components(separatedBy: "\n").compactMap { line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { return nil }
-
-            // Format: "name: N documents, X.X MB"
-            guard let colonIndex = trimmed.firstIndex(of: ":") else { return nil }
-            let name = String(trimmed[trimmed.startIndex ..< colonIndex])
-                .trimmingCharacters(in: .whitespaces)
-            guard !name.isEmpty else { return nil }
-
-            let rest = String(trimmed[trimmed.index(after: colonIndex)...])
-                .trimmingCharacters(in: .whitespaces)
-
-            // Extract document count
-            var documentCount = 0
-            if let docsRange = rest.range(of: #"(\d+) documents?"#, options: .regularExpression) {
-                let digits = rest[docsRange].split(separator: " ").first ?? ""
-                documentCount = Int(digits) ?? 0
-            }
-
-            // Extract size description (everything after the comma)
-            var sizeDescription = ""
-            if let commaIndex = rest.firstIndex(of: ",") {
-                sizeDescription = String(rest[rest.index(after: commaIndex)...])
-                    .trimmingCharacters(in: .whitespaces)
-            }
-
-            return DatabaseInfo(name: name, documentCount: documentCount, sizeDescription: sizeDescription)
-        }
-    }
 
     func discoverDatabases() async throws -> [DatabaseInfo] {
         let process = Process()
@@ -100,8 +66,9 @@ struct CLIDatabaseDiscovery: DatabaseDiscovery {
         }
 
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        return Self.parse(output)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode([DatabaseInfo].self, from: data)
     }
 
     // MARK: Private
