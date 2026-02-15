@@ -22,6 +22,12 @@ struct SearchPanel: View {
         .onAppear {
             isSearchFocused = true
         }
+        .onChange(of: viewModel.query) { _, newQuery in
+            if newQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                selectedResult = nil
+                selectedResultID = nil
+            }
+        }
     }
 
     // MARK: Private
