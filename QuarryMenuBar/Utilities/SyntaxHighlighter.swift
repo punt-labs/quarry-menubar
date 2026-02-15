@@ -9,6 +9,11 @@ enum SyntaxHighlighter {
 
     // MARK: Internal
 
+    /// Whether the given file extension is treated as source code (monospace font).
+    static func isCodeFormat(_ format: String) -> Bool {
+        codeFormats.contains(format)
+    }
+
     static func highlight(_ text: String, format: String, fontSize: CGFloat = 0) -> AttributedString {
         let size = fontSize > 0 ? fontSize : NSFont.smallSystemFontSize
         let nsAttr = NSMutableAttributedString(string: text)
