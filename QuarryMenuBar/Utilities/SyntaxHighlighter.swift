@@ -1,6 +1,5 @@
 import AppKit
 import HighlightSwift
-import SwiftUI
 
 /// Syntax highlighter that delegates code coloring to HighlightSwift (highlight.js)
 /// and handles Markdown formatting with custom inline-transform logic.

@@ -38,13 +38,15 @@ struct ResultDetail: View {
         .task(id: taskID) {
             highlighted = nil
             let fontSize: CGFloat = isCode ? 11 : 13
-            highlighted = await SyntaxHighlighter.highlight(
+            let newHighlight = await SyntaxHighlighter.highlight(
                 result.text,
                 format: result.sourceFormat,
                 fontSize: fontSize,
                 theme: resolvedTheme,
                 lightMode: colorScheme == .light
             )
+            guard !Task.isCancelled else { return }
+            highlighted = newHighlight
         }
     }
 
