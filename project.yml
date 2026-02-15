@@ -10,6 +10,11 @@ options:
   defaultConfig: Debug
   developmentLanguage: en
 
+packages:
+  HighlightSwift:
+    url: https://github.com/jmf-pobox/HighlightSwift
+    from: "1.1.0"
+
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -25,6 +30,8 @@ targets:
       - path: QuarryMenuBar
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: HighlightSwift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.puntlabs.quarry-menubar

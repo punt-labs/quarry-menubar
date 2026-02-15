@@ -1,55 +1,62 @@
 import AppKit
-import SwiftUI
+import HighlightSwift
 
-/// Lightweight regex-based syntax highlighter for code snippets.
-///
-/// Uses `NSColor.system*` adaptive colors so output automatically
-/// respects the system light/dark appearance.
+/// Syntax highlighter that delegates code coloring to HighlightSwift (highlight.js)
+/// and handles Markdown formatting with custom inline-transform logic.
 enum SyntaxHighlighter {
 
     // MARK: Internal
 
     /// Whether the given file extension is treated as source code (monospace font).
     static func isCodeFormat(_ format: String) -> Bool {
-        codeFormats.contains(format)
+        languageMap[format] != nil
     }
 
-    static func highlight(_ text: String, format: String, fontSize: CGFloat = 0) -> AttributedString {
+    /// Map a source-format extension to a HighlightSwift language.
+    /// Returns `nil` for non-code formats (.pdf, .txt, .tex, .docx, .md).
+    static func language(for format: String) -> HighlightLanguage? {
+        languageMap[format]
+    }
+
+    /// Highlight code or format prose for display.
+    ///
+    /// - Code formats: tokenized by highlight.js via HighlightSwift
+    /// - Markdown: custom syntax stripping + inline formatting
+    /// - Everything else: plain text with system font
+    static func highlight(
+        _ text: String,
+        format: String,
+        fontSize: CGFloat = 0,
+        theme: HighlightTheme = .xcode,
+        lightMode: Bool = true
+    ) async -> AttributedString {
         let size = fontSize > 0 ? fontSize : NSFont.smallSystemFontSize
-        let nsAttr = NSMutableAttributedString(string: text)
-        let fullRange = NSRange(location: 0, length: nsAttr.length)
-
-        let isCode = codeFormats.contains(format)
-        let font: NSFont = isCode
-            ? .monospacedSystemFont(ofSize: size, weight: .regular)
-            : .systemFont(ofSize: size)
-
-        nsAttr.addAttribute(.font, value: font, range: fullRange)
-        nsAttr.addAttribute(.foregroundColor, value: NSColor.labelColor, range: fullRange)
 
         if format == ".md" {
             return highlightMarkdown(text, fontSize: size)
         }
 
-        let patterns: [(String, NSColor)] = switch format {
-        case ".py": pythonPatterns
-        default: isCode ? genericCodePatterns : []
+        guard let lang = languageMap[format] else {
+            return plainText(text, fontSize: size)
         }
 
-        for (pattern, color) in patterns {
-            guard let regex = try? NSRegularExpression(
-                pattern: pattern,
-                options: [.anchorsMatchLines]
-            ) else { continue }
-            for match in regex.matches(in: text, range: fullRange) {
-                nsAttr.addAttribute(.foregroundColor, value: color, range: match.range)
-            }
+        let colors: HighlightColors = lightMode ? .light(theme) : .dark(theme)
+        do {
+            var result = try await highlighter.attributedText(text, language: lang, colors: colors)
+            let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+            var fontAttrs = AttributeContainer()
+            fontAttrs.appKit.font = font
+            result.mergeAttributes(fontAttrs)
+            return result
+        } catch {
+            // Fallback to plain monospace on highlight.js failure
+            return plainText(text, fontSize: size, monospace: true)
         }
-
-        return AttributedString(nsAttr)
     }
 
     // MARK: Private
+
+    // MARK: - Markdown (strip syntax, apply formatting)
 
     /// A pending replacement: swap `range` with `replacement` and apply `attributes`.
     private struct InlineTransform {
@@ -58,52 +65,45 @@ enum SyntaxHighlighter {
         let attributes: [NSAttributedString.Key: Any]
     }
 
-    private static let codeFormats: Set<String> = [
-        ".py", ".js", ".ts", ".swift", ".rs", ".go", ".java",
-        ".c", ".cpp", ".h", ".rb", ".sh", ".toml", ".yaml", ".yml", ".json"
+    /// Shared Highlight instance — reuses the JavaScriptCore context across calls.
+    private static let highlighter = Highlight()
+
+    /// Extension → HighlightLanguage mapping. Only code formats appear here;
+    /// absence means the format gets plain-text treatment.
+    private static let languageMap: [String: HighlightLanguage] = [
+        ".py": .python,
+        ".js": .javaScript,
+        ".ts": .typeScript,
+        ".swift": .swift,
+        ".rs": .rust,
+        ".go": .go,
+        ".java": .java,
+        ".c": .c,
+        ".cpp": .cPlusPlus,
+        ".h": .c,
+        ".rb": .ruby,
+        ".sh": .bash,
+        ".toml": .toml,
+        ".yaml": .yaml,
+        ".yml": .yaml,
+        ".json": .json
     ]
 
-    // MARK: - Python
-
-    private static let pythonPatterns: [(String, NSColor)] = [
-        // Comments (must come first — overrides later matches within comments)
-        (#"#[^\n]*"#, .secondaryLabelColor),
-        // Triple-quoted strings
-        (#""{3}[\s\S]*?"{3}"#, .systemRed),
-        (#"'{3}[\s\S]*?'{3}"#, .systemRed),
-        // Single/double quoted strings
-        (#""[^"\n]*""#, .systemRed),
-        (#"'[^'\n]*'"#, .systemRed),
-        // Keywords
-        (
-            #"\b(def|class|import|from|return|if|else|elif|for|in|while|with|as|not|and|or|try|except|finally|raise|pass|break|continue|yield|lambda|global|nonlocal|assert|del|is|async|await)\b"#,
-            .systemPurple
-        ),
-        // Built-in constants
-        (#"\b(None|True|False|self)\b"#, .systemOrange),
-        // Decorators
-        (#"@\w+"#, .systemTeal),
-        // Numbers
-        (#"\b\d+\.?\d*\b"#, .systemBlue),
-        // Function/class names after keyword
-        (#"(?<=\bdef\s)\w+"#, .systemBlue),
-        (#"(?<=\bclass\s)\w+"#, .systemBlue)
-    ]
-
-    // MARK: - Generic (C-family comments + strings)
-
-    private static let genericCodePatterns: [(String, NSColor)] = [
-        // Line comments
-        (#"//[^\n]*"#, .secondaryLabelColor),
-        (#"#[^\n]*"#, .secondaryLabelColor),
-        // Strings
-        (#""[^"\n]*""#, .systemRed),
-        (#"'[^'\n]*'"#, .systemRed),
-        // Numbers
-        (#"\b\d+\.?\d*\b"#, .systemBlue)
-    ]
-
-    // MARK: - Markdown (strip syntax, apply formatting)
+    private static func plainText(
+        _ text: String,
+        fontSize: CGFloat,
+        monospace: Bool = false
+    ) -> AttributedString {
+        let font: NSFont = monospace
+            ? .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            : .systemFont(ofSize: fontSize)
+        var attrs = AttributeContainer()
+        attrs.appKit.font = font
+        attrs.appKit.foregroundColor = .labelColor
+        var result = AttributedString(text)
+        result.mergeAttributes(attrs)
+        return result
+    }
 
     private static func highlightMarkdown(_ text: String, fontSize: CGFloat) -> AttributedString {
         let baseFont = NSFont.systemFont(ofSize: fontSize)

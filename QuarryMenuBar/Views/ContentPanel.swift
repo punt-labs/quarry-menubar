@@ -1,3 +1,4 @@
+import HighlightSwift
 import SwiftUI
 
 /// Root content view for the menu bar panel.
@@ -33,6 +34,18 @@ struct ContentPanel: View {
 
     private static let emptyStateTopPadding: CGFloat = 40
 
+    /// Curated subset of HighlightTheme for the picker.
+    private static let themeChoices: [(theme: HighlightTheme, label: String)] = [
+        (.xcode, "Xcode"),
+        (.github, "GitHub"),
+        (.atomOne, "Atom One"),
+        (.solarized, "Solarized"),
+        (.tokyoNight, "Tokyo Night"),
+        (.standard, "Standard")
+    ]
+
+    @AppStorage("syntaxTheme") private var themeName: String = "xcode"
+
     private var header: some View {
         HStack {
             Image(systemName: "doc.text.magnifyingglass")
@@ -44,10 +57,34 @@ struct ContentPanel: View {
                 onSwitch: onDatabaseSwitch
             )
             Spacer()
+            themeMenu
             statusBadge
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var themeMenu: some View {
+        Menu {
+            ForEach(Self.themeChoices, id: \.theme) { choice in
+                Button {
+                    themeName = choice.theme.rawValue.lowercased()
+                } label: {
+                    HStack {
+                        Text(choice.label)
+                        if themeName.lowercased() == choice.theme.rawValue.lowercased() {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "paintbrush")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     @ViewBuilder
