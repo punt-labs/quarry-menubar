@@ -8,12 +8,28 @@ struct ResultDetail: View {
     let client: QuarryClient
 
     var body: some View {
+        let isCode = SyntaxHighlighter.isCodeFormat(result.sourceFormat)
+        let fontSize: CGFloat = isCode ? 11 : 13
+        let highlighted = SyntaxHighlighter.highlight(
+            result.text,
+            format: result.sourceFormat,
+            fontSize: fontSize
+        )
+
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 Divider()
-                Text(SyntaxHighlighter.highlight(result.text, format: result.sourceFormat, fontSize: 13))
-                    .textSelection(.enabled)
+                if isCode {
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        Text(highlighted)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                } else {
+                    Text(highlighted)
+                        .textSelection(.enabled)
+                }
                 Spacer()
             }
             .padding(12)
