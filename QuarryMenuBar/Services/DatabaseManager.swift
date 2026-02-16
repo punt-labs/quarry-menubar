@@ -48,17 +48,24 @@ struct CLIDatabaseDiscovery: DatabaseDiscovery {
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
 
-        // Set terminationHandler BEFORE run() to avoid a race where the
-        // process completes before the handler is registered.
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            process.terminationHandler = { _ in
-                continuation.resume()
+        // Terminate the subprocess when the task is cancelled (e.g. by the
+        // timeout task group). Without this, withCheckedThrowingContinuation
+        // hangs forever because it doesn't respond to task cancellation —
+        // the task group waits for all children, and the continuation waits
+        // for the process terminationHandler that never fires.
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                process.terminationHandler = { _ in
+                    continuation.resume()
+                }
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: error)
-            }
+        } onCancel: {
+            process.terminate()
         }
 
         guard process.terminationStatus == 0 else {
