@@ -35,7 +35,7 @@ struct QuarryMenuBarApp: App {
     // MARK: Internal
 
     var body: some Scene {
-        MenuBarExtra("Quarry", systemImage: statusBarIcon) {
+        MenuBarExtra {
             ContentPanel(
                 daemon: daemon,
                 searchViewModel: searchViewModel,
@@ -43,6 +43,8 @@ struct QuarryMenuBarApp: App {
                 onDatabaseSwitch: switchDatabase
             )
             .frame(width: 550, height: 500)
+        } label: {
+            Image(systemName: statusBarIcon)
         }
         .menuBarExtraStyle(.window)
     }
@@ -56,13 +58,14 @@ struct QuarryMenuBarApp: App {
 
     private var statusBarIcon: String {
         switch daemon.state {
-        case .stopped,
-             .starting:
-            "doc.text.magnifyingglass"
+        case .stopped:
+            "sparkle.magnifyingglass"
+        case .starting:
+            "sparkle.magnifyingglass"
         case .running:
-            "doc.text.magnifyingglass"
+            "sparkle.magnifyingglass"
         case .error:
-            "exclamationmark.triangle"
+            "exclamationmark.triangle.fill"
         }
     }
 
