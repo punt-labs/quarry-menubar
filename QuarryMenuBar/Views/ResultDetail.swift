@@ -94,13 +94,24 @@ struct ResultDetail: View {
             if let info = docs.documents.first(where: { $0.documentName == result.documentName }) {
                 let url = URL(fileURLWithPath: info.documentPath)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
-                NSApp.hide(nil)
+                activateFinder()
             }
         } catch {
             // Fall back to opening the quarry data directory
             let home = FileManager.default.homeDirectoryForCurrentUser
             let dataDir = home.appendingPathComponent(".quarry").appendingPathComponent("data")
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dataDir.path)
+            activateFinder()
         }
+    }
+
+    /// Bring Finder to the foreground.
+    ///
+    /// `activateFileViewerSelecting` reveals the file but doesn't raise Finder
+    /// above other windows when called from an LSUIElement (agent) app.
+    private func activateFinder() {
+        NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
+            .first?
+            .activate()
     }
 }
