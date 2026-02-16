@@ -123,7 +123,7 @@ struct SearchPanel: View {
             let grouped = Dictionary(grouping: results, by: \.sourceFormat)
             let sortedKeys = grouped.keys.sorted()
             ScrollViewReader { proxy in
-                List(selection: $selectedResultID) {
+                List {
                     ForEach(sortedKeys, id: \.self) { format in
                         Section {
                             ForEach(grouped[format] ?? []) { result in
@@ -134,6 +134,11 @@ struct SearchPanel: View {
                                 .id(result.id)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
+                                .listRowBackground(
+                                    result.id == selectedResultID
+                                        ? Color.accentColor.opacity(0.2)
+                                        : Color.clear
+                                )
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     selectedResult = result
