@@ -44,12 +44,22 @@ final class SearchViewModel {
     // MARK: Internal
 
     private(set) var state: SearchState = .idle
+    private(set) var availableCollections: [String] = []
 
     let client: QuarryClient
 
     var query: String = "" {
         didSet {
             debounceSearch()
+        }
+    }
+
+    var selectedCollection: String? {
+        didSet {
+            // Re-run the current search when filter changes
+            if oldValue != selectedCollection {
+                search()
+            }
         }
     }
 
@@ -64,7 +74,7 @@ final class SearchViewModel {
         searchTask = Task {
             state = .loading
             do {
-                let response = try await client.search(query: trimmed)
+                let response = try await client.search(query: trimmed, collection: selectedCollection)
                 guard !Task.isCancelled else { return }
                 if response.results.isEmpty {
                     state = .empty(trimmed)
@@ -85,6 +95,17 @@ final class SearchViewModel {
         query = ""
         searchTask?.cancel()
         state = .idle
+    }
+
+    func loadCollections() async {
+        do {
+            let response = try await client.collections()
+            availableCollections = response.collections.map(\.collection).sorted()
+        } catch is CancellationError {
+            // Task cancelled (e.g. view disappeared) — not an error
+        } catch {
+            logger.error("Failed to load collections: \(error)")
+        }
     }
 
     // MARK: Private

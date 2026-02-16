@@ -19,6 +19,9 @@ struct SearchPanel: View {
                     .animation(.easeInOut(duration: 0.15), value: viewModel.state)
             }
         }
+        .task {
+            await viewModel.loadCollections()
+        }
         .onAppear {
             isSearchFocused = true
         }
@@ -28,19 +31,57 @@ struct SearchPanel: View {
                 selectedResultID = nil
             }
         }
+        .onChange(of: viewModel.selectedCollection) { _, _ in
+            selectedResult = nil
+            selectedResultID = nil
+        }
     }
 
     // MARK: Private
 
     private static let emptyStateTopPadding: CGFloat = 40
 
+    /// Anchor for scroll-to on selection change.
+    /// Upward uses a point slightly below viewport top so partially-visible
+    /// items fully clear sticky section headers and list chrome.
+    private static let scrollAnchorUp = UnitPoint(x: 0.5, y: 0.15)
+
     @State private var selectedResult: SearchResult?
     @State private var selectedResultID: SearchResult.ID?
+
     @State private var scrollAnchor: UnitPoint = .top
     @FocusState private var isSearchFocused: Bool
 
+    private var collectionPicker: some View {
+        Menu {
+            Button("All") {
+                viewModel.selectedCollection = nil
+            }
+            if !viewModel.availableCollections.isEmpty {
+                Divider()
+                ForEach(viewModel.availableCollections, id: \.self) { name in
+                    Button(name) {
+                        viewModel.selectedCollection = name
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 2) {
+                Image(systemName: "folder")
+                Text(viewModel.selectedCollection ?? "All")
+                    .lineLimit(1)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
     private var searchField: some View {
         HStack {
+            collectionPicker
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
             TextField("Search documents…", text: $viewModel.query)
@@ -92,7 +133,7 @@ struct SearchPanel: View {
             let grouped = Dictionary(grouping: results, by: \.sourceFormat)
             let sortedKeys = grouped.keys.sorted()
             ScrollViewReader { proxy in
-                List(selection: $selectedResultID) {
+                List {
                     ForEach(sortedKeys, id: \.self) { format in
                         Section {
                             ForEach(grouped[format] ?? []) { result in
@@ -103,6 +144,11 @@ struct SearchPanel: View {
                                 .id(result.id)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
+                                .listRowBackground(
+                                    result.id == selectedResultID
+                                        ? Color.accentColor.opacity(0.2)
+                                        : Color.clear
+                                )
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     selectedResult = result
@@ -202,7 +248,7 @@ struct SearchPanel: View {
         let ordered = flatResults(from: results)
         guard !ordered.isEmpty else { return .ignored }
 
-        scrollAnchor = offset > 0 ? .bottom : .top
+        scrollAnchor = offset > 0 ? .bottom : Self.scrollAnchorUp
         if let currentID = selectedResultID,
            let currentIndex = ordered.firstIndex(where: { $0.id == currentID }) {
             let newIndex = currentIndex + offset
