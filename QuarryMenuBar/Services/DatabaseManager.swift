@@ -3,7 +3,7 @@ import os
 
 // MARK: - DatabaseInfo
 
-struct DatabaseInfo: Sendable, Identifiable, Equatable, Decodable {
+struct DatabaseInfo: Sendable, Identifiable, Equatable, Codable {
 
     let name: String
     let documentCount: Int
@@ -113,6 +113,7 @@ final class DatabaseManager {
         self.userDefaults = userDefaults
         self.discoveryTimeout = discoveryTimeout
         currentDatabase = userDefaults.string(forKey: Self.selectedDatabaseKey) ?? "default"
+        availableDatabases = Self.loadCachedDatabases(from: userDefaults)
     }
 
     // MARK: Internal
@@ -150,6 +151,7 @@ final class DatabaseManager {
                 return result
             }
             availableDatabases = discovered
+            Self.cacheDatabases(discovered, to: userDefaults)
             logger.info("Discovered \(discovered.count) databases")
         } catch {
             if case DatabaseManagerError.discoveryTimedOut = error {
@@ -171,9 +173,20 @@ final class DatabaseManager {
     // MARK: Private
 
     private static let selectedDatabaseKey = "com.puntlabs.quarry-menubar.selectedDatabase"
+    private static let cachedDatabasesKey = "com.puntlabs.quarry-menubar.cachedDatabases"
 
     private let discovery: DatabaseDiscovery
     private let discoveryTimeout: Duration
     private let userDefaults: UserDefaults
     private let logger = Logger(subsystem: "com.puntlabs.quarry-menubar", category: "DatabaseManager")
+
+    private static func loadCachedDatabases(from defaults: UserDefaults) -> [DatabaseInfo] {
+        guard let data = defaults.data(forKey: cachedDatabasesKey) else { return [] }
+        return (try? JSONDecoder().decode([DatabaseInfo].self, from: data)) ?? []
+    }
+
+    private static func cacheDatabases(_ databases: [DatabaseInfo], to defaults: UserDefaults) {
+        guard let data = try? JSONEncoder().encode(databases) else { return }
+        defaults.set(data, forKey: cachedDatabasesKey)
+    }
 }
