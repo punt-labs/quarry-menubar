@@ -31,6 +31,10 @@ struct SearchPanel: View {
                 selectedResultID = nil
             }
         }
+        .onChange(of: viewModel.selectedCollection) { _, _ in
+            selectedResult = nil
+            selectedResultID = nil
+        }
     }
 
     // MARK: Private

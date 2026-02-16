@@ -101,6 +101,8 @@ final class SearchViewModel {
         do {
             let response = try await client.collections()
             availableCollections = response.collections.map(\.collection).sorted()
+        } catch is CancellationError {
+            // Task cancelled (e.g. view disappeared) — not an error
         } catch {
             logger.error("Failed to load collections: \(error)")
         }
