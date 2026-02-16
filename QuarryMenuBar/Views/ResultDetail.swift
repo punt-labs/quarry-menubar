@@ -15,15 +15,19 @@ struct ResultDetail: View {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 Divider()
-                if let highlighted {
+                if let output = highlightOutput {
                     if isCode {
                         ScrollView(.horizontal, showsIndicators: true) {
-                            Text(highlighted)
+                            Text(output.text)
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: true, vertical: false)
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .background(output.backgroundColor ?? Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     } else {
-                        Text(highlighted)
+                        Text(output.text)
                             .textSelection(.enabled)
                     }
                 } else {
@@ -36,9 +40,9 @@ struct ResultDetail: View {
             .padding(12)
         }
         .task(id: taskID) {
-            highlighted = nil
+            highlightOutput = nil
             let fontSize: CGFloat = isCode ? 11 : 13
-            let newHighlight = await SyntaxHighlighter.highlight(
+            let newOutput = await SyntaxHighlighter.highlight(
                 result.text,
                 format: result.sourceFormat,
                 fontSize: fontSize,
@@ -46,13 +50,13 @@ struct ResultDetail: View {
                 lightMode: colorScheme == .light
             )
             guard !Task.isCancelled else { return }
-            highlighted = newHighlight
+            highlightOutput = newOutput
         }
     }
 
     // MARK: Private
 
-    @State private var highlighted: AttributedString?
+    @State private var highlightOutput: SyntaxHighlighter.Output?
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("syntaxTheme") private var themeName: String = "xcode"
 

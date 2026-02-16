@@ -55,70 +55,75 @@ final class SyntaxHighlighterTests: XCTestCase {
 
     // MARK: - Async Highlight (Code)
 
-    func testHighlightPythonReturnsNonEmptyAttributedString() async {
+    func testHighlightPythonReturnsNonEmptyWithBackground() async {
         let code = "def hello():\n    print('world')"
-        let result = await SyntaxHighlighter.highlight(code, format: ".py")
-        XCTAssertFalse(String(result.characters).isEmpty)
-        XCTAssertEqual(String(result.characters), code)
+        let output = await SyntaxHighlighter.highlight(code, format: ".py")
+        XCTAssertFalse(String(output.text.characters).isEmpty)
+        XCTAssertEqual(String(output.text.characters), code)
+        XCTAssertNotNil(output.backgroundColor)
     }
 
-    func testHighlightSwiftReturnsNonEmptyAttributedString() async {
+    func testHighlightSwiftReturnsNonEmptyWithBackground() async {
         let code = "let x = 42"
-        let result = await SyntaxHighlighter.highlight(code, format: ".swift")
-        XCTAssertFalse(String(result.characters).isEmpty)
-        XCTAssertEqual(String(result.characters), code)
+        let output = await SyntaxHighlighter.highlight(code, format: ".swift")
+        XCTAssertFalse(String(output.text.characters).isEmpty)
+        XCTAssertEqual(String(output.text.characters), code)
+        XCTAssertNotNil(output.backgroundColor)
     }
 
     func testHighlightPreservesSourceText() async {
         let code = "console.log('hello');\nconst x = { key: 'value' };"
-        let result = await SyntaxHighlighter.highlight(code, format: ".js")
-        XCTAssertEqual(String(result.characters), code)
+        let output = await SyntaxHighlighter.highlight(code, format: ".js")
+        XCTAssertEqual(String(output.text.characters), code)
     }
 
     // MARK: - Non-Code Formats
 
-    func testNonCodeFormatReturnsPlainText() async {
+    func testNonCodeFormatReturnsPlainTextWithNoBackground() async {
         let text = "This is plain text content."
-        let result = await SyntaxHighlighter.highlight(text, format: ".pdf")
-        XCTAssertEqual(String(result.characters), text)
+        let output = await SyntaxHighlighter.highlight(text, format: ".pdf")
+        XCTAssertEqual(String(output.text.characters), text)
+        XCTAssertNil(output.backgroundColor)
     }
 
-    func testUnknownFormatReturnsPlainText() async {
+    func testUnknownFormatReturnsPlainTextWithNoBackground() async {
         let text = "Unknown format content."
-        let result = await SyntaxHighlighter.highlight(text, format: ".xyz")
-        XCTAssertEqual(String(result.characters), text)
+        let output = await SyntaxHighlighter.highlight(text, format: ".xyz")
+        XCTAssertEqual(String(output.text.characters), text)
+        XCTAssertNil(output.backgroundColor)
     }
 
     // MARK: - Markdown
 
     func testMarkdownStripsHeaderMarkers() async {
         let md = "### Hello World"
-        let result = await SyntaxHighlighter.highlight(md, format: ".md")
-        XCTAssertEqual(String(result.characters), "Hello World")
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+        XCTAssertEqual(String(output.text.characters), "Hello World")
+        XCTAssertNil(output.backgroundColor)
     }
 
     func testMarkdownStripsInlineCode() async {
         let md = "Use `foo` here"
-        let result = await SyntaxHighlighter.highlight(md, format: ".md")
-        XCTAssertEqual(String(result.characters), "Use foo here")
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+        XCTAssertEqual(String(output.text.characters), "Use foo here")
     }
 
     func testMarkdownStripsBold() async {
         let md = "This is **bold** text"
-        let result = await SyntaxHighlighter.highlight(md, format: ".md")
-        XCTAssertEqual(String(result.characters), "This is bold text")
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+        XCTAssertEqual(String(output.text.characters), "This is bold text")
     }
 
     func testMarkdownStripsLinks() async {
         let md = "Click [here](https://example.com) now"
-        let result = await SyntaxHighlighter.highlight(md, format: ".md")
-        XCTAssertEqual(String(result.characters), "Click here now")
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+        XCTAssertEqual(String(output.text.characters), "Click here now")
     }
 
     func testMarkdownStripsBlockQuotes() async {
         let md = "> Quoted text"
-        let result = await SyntaxHighlighter.highlight(md, format: ".md")
-        XCTAssertEqual(String(result.characters), "Quoted text")
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+        XCTAssertEqual(String(output.text.characters), "Quoted text")
     }
 
     // MARK: - Theme / Color Scheme
@@ -131,10 +136,9 @@ final class SyntaxHighlighterTests: XCTestCase {
         let dark = await SyntaxHighlighter.highlight(
             code, format: ".swift", theme: .xcode, lightMode: false
         )
-        // Both preserve text, but attributed styling differs
-        XCTAssertEqual(String(light.characters), code)
-        XCTAssertEqual(String(dark.characters), code)
-        XCTAssertNotEqual(light, dark)
+        XCTAssertEqual(String(light.text.characters), code)
+        XCTAssertEqual(String(dark.text.characters), code)
+        XCTAssertNotEqual(light.text, dark.text)
     }
 
     func testDifferentThemesProduceDifferentResults() async {
@@ -145,8 +149,8 @@ final class SyntaxHighlighterTests: XCTestCase {
         let github = await SyntaxHighlighter.highlight(
             code, format: ".py", theme: .github, lightMode: true
         )
-        XCTAssertEqual(String(xcode.characters), code)
-        XCTAssertEqual(String(github.characters), code)
-        XCTAssertNotEqual(xcode, github)
+        XCTAssertEqual(String(xcode.text.characters), code)
+        XCTAssertEqual(String(github.text.characters), code)
+        XCTAssertNotEqual(xcode.text, github.text)
     }
 }

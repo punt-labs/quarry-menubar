@@ -60,10 +60,10 @@ struct SearchPanel: View {
                     handleEscape()
                 }
                 .onKeyPress(.downArrow) {
-                    moveSelection(by: 1)
+                    selectedResult == nil ? moveSelection(by: 1) : .ignored
                 }
                 .onKeyPress(.upArrow) {
-                    moveSelection(by: -1)
+                    selectedResult == nil ? moveSelection(by: -1) : .ignored
                 }
         }
         .padding(10)
@@ -167,7 +167,8 @@ struct SearchPanel: View {
                 selectedResult = nil
             } label: {
                 Label("Back", systemImage: "chevron.left")
-                    .font(.caption)
+                    .font(.subheadline)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Spacer()
@@ -176,12 +177,13 @@ struct SearchPanel: View {
                 NSPasteboard.general.setString(result.text, forType: .string)
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
-                    .font(.caption)
+                    .font(.subheadline)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 
     private func handleEscape() {

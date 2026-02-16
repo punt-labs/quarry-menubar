@@ -1,11 +1,18 @@
 import AppKit
 import HighlightSwift
+import SwiftUI
 
 /// Syntax highlighter that delegates code coloring to HighlightSwift (highlight.js)
 /// and handles Markdown formatting with custom inline-transform logic.
 enum SyntaxHighlighter {
 
     // MARK: Internal
+
+    /// Result of a highlight operation: attributed text and optional background color.
+    struct Output {
+        let text: AttributedString
+        let backgroundColor: Color?
+    }
 
     /// Whether the given file extension is treated as source code (monospace font).
     static func isCodeFormat(_ format: String) -> Bool {
@@ -20,37 +27,42 @@ enum SyntaxHighlighter {
 
     /// Highlight code or format prose for display.
     ///
-    /// - Code formats: tokenized by highlight.js via HighlightSwift
-    /// - Markdown: custom syntax stripping + inline formatting
-    /// - Everything else: plain text with system font
+    /// - Code formats: tokenized by highlight.js via HighlightSwift, with theme background
+    /// - Markdown: custom syntax stripping + inline formatting (no background)
+    /// - Everything else: plain text with system font (no background)
     static func highlight(
         _ text: String,
         format: String,
         fontSize: CGFloat = 0,
         theme: HighlightTheme = .xcode,
         lightMode: Bool = true
-    ) async -> AttributedString {
+    ) async -> Output {
         let size = fontSize > 0 ? fontSize : NSFont.smallSystemFontSize
 
         if format == ".md" {
-            return highlightMarkdown(text, fontSize: size)
+            return Output(text: highlightMarkdown(text, fontSize: size), backgroundColor: nil)
         }
 
         guard let lang = languageMap[format] else {
-            return plainText(text, fontSize: size)
+            return Output(text: plainText(text, fontSize: size), backgroundColor: nil)
         }
 
         let colors: HighlightColors = lightMode ? .light(theme) : .dark(theme)
         do {
-            var result = try await highlighter.attributedText(text, language: lang, colors: colors)
+            let result = try await highlighter.request(
+                text,
+                mode: .language(lang),
+                colors: colors
+            )
+            var attributed = result.attributedText
             let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
             var fontAttrs = AttributeContainer()
             fontAttrs.appKit.font = font
-            result.mergeAttributes(fontAttrs)
-            return result
+            attributed.mergeAttributes(fontAttrs)
+            return Output(text: attributed, backgroundColor: result.backgroundColor)
         } catch {
             // Fallback to plain monospace on highlight.js failure
-            return plainText(text, fontSize: size, monospace: true)
+            return Output(text: plainText(text, fontSize: size, monospace: true), backgroundColor: nil)
         }
     }
 

@@ -25,6 +25,7 @@ struct ContentPanel: View {
             Divider()
             footer
         }
+        .preferredColorScheme(activeThemeIsDark ? .dark : .light)
         .task {
             daemon.start()
         }
@@ -32,19 +33,37 @@ struct ContentPanel: View {
 
     // MARK: Private
 
+    /// A curated theme entry for the picker.
+    private struct ThemeChoice: Identifiable {
+        let theme: HighlightTheme
+        let label: String
+        let isDark: Bool
+
+        var id: HighlightTheme {
+            theme
+        }
+    }
+
     private static let emptyStateTopPadding: CGFloat = 40
 
     /// Curated subset of HighlightTheme for the picker.
-    private static let themeChoices: [(theme: HighlightTheme, label: String)] = [
-        (.xcode, "Xcode"),
-        (.github, "GitHub"),
-        (.atomOne, "Atom One"),
-        (.solarized, "Solarized"),
-        (.tokyoNight, "Tokyo Night"),
-        (.standard, "Standard")
+    /// `isDark` determines the panel's color scheme and which theme variant to use.
+    private static let themeChoices: [ThemeChoice] = [
+        ThemeChoice(theme: .xcode, label: "Xcode", isDark: false),
+        ThemeChoice(theme: .github, label: "GitHub", isDark: false),
+        ThemeChoice(theme: .atomOne, label: "Atom One", isDark: true),
+        ThemeChoice(theme: .solarized, label: "Solarized", isDark: true),
+        ThemeChoice(theme: .tokyoNight, label: "Tokyo Night", isDark: true),
+        ThemeChoice(theme: .standard, label: "Standard", isDark: false)
     ]
 
     @AppStorage("syntaxTheme") private var themeName: String = "xcode"
+
+    private var activeThemeIsDark: Bool {
+        Self.themeChoices.first {
+            $0.theme.rawValue.lowercased() == themeName.lowercased()
+        }?.isDark ?? false
+    }
 
     private var header: some View {
         HStack {
@@ -66,7 +85,7 @@ struct ContentPanel: View {
 
     private var themeMenu: some View {
         Menu {
-            ForEach(Self.themeChoices, id: \.theme) { choice in
+            ForEach(Self.themeChoices) { choice in
                 Button {
                     themeName = choice.theme.rawValue.lowercased()
                 } label: {
