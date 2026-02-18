@@ -1,6 +1,6 @@
 # quarry-menubar
 
-macOS menu bar app for [Quarry](https://github.com/jmf-pobox/quarry-mcp) document search. Search your indexed documents from anywhere with a keyboard shortcut.
+macOS menu bar app for [Quarry](https://github.com/punt-labs/quarry) document search. Search your indexed documents from anywhere with a keyboard shortcut.
 
 ## What It Does
 
@@ -16,7 +16,7 @@ The app manages its own `quarry serve` process — no manual server setup needed
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- [quarry-mcp](https://github.com/jmf-pobox/quarry-mcp) installed with at least one indexed database
+- [quarry-mcp](https://github.com/punt-labs/quarry) installed with at least one indexed database
 
 ```bash
 pip install quarry-mcp

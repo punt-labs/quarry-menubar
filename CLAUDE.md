@@ -6,7 +6,7 @@ I am a principal engineer. Every change I make leaves the codebase in a better s
 
 ## Relationship to Parent Project
 
-This is a **sub-project** of [quarry](https://github.com/jmf-pobox/quarry-mcp) (`../ocr`). Quarry is a Python CLI/MCP server for OCR document search backed by LanceDB. This repo is the macOS menu bar companion app — a native Swift/SwiftUI frontend that talks to `quarry serve` over localhost HTTP.
+This is a **sub-project** of [quarry](https://github.com/punt-labs/quarry) (`../ocr`). Quarry is a Python CLI/MCP server for OCR document search backed by LanceDB. This repo is the macOS menu bar companion app — a native Swift/SwiftUI frontend that talks to `quarry serve` over localhost HTTP.
 
 Both repos share the same development workflow conventions (branch discipline, micro-commits, session close protocol, beads issue tracking). The Python-specific standards (ruff, mypy, uv) do not apply here; the Swift equivalents (SwiftFormat, SwiftLint, xcodebuild) do.
 
