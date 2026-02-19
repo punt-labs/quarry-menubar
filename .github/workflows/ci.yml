@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and Unit Tests
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Get XcodeGen version
+        id: xcodegen-version
+        run: |
+          version=$(brew info xcodegen --json=v2 | jq -r '.formulae[0].versions.stable')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew/downloads
+            /opt/homebrew/Cellar/xcodegen
+          key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen-${{ steps.xcodegen-version.outputs.version }}
+          restore-keys: |
+            brew-${{ runner.os }}-${{ runner.arch }}-xcodegen-
+
+      - name: Install XcodeGen
+        run: brew list xcodegen &>/dev/null && brew link --overwrite xcodegen || brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Cache DerivedData
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .deriveddata
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('**/*.swift', 'project.yml') }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -scheme QuarryMenuBar \
+            -destination 'platform=macOS' \
+            -derivedDataPath .deriveddata \
+            -quiet
+
+      - name: Run Unit Tests
+        run: |
+          xcodebuild test \
+            -scheme QuarryMenuBar \
+            -destination 'platform=macOS' \
+            -derivedDataPath .deriveddata \
+            -only-testing:QuarryMenuBarTests \
+            -resultBundlePath TestResults.xcresult \
+            | xcpretty --color --report junit
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: TestResults.xcresult
+
+  lint:
+    name: Lint
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Get SwiftLint version
+        id: swiftlint-version
+        run: |
+          version=$(brew info swiftlint --json=v2 | jq -r '.formulae[0].versions.stable')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Homebrew packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew/downloads
+            /opt/homebrew/Cellar/swiftlint
+          key: brew-${{ runner.os }}-${{ runner.arch }}-swiftlint-${{ steps.swiftlint-version.outputs.version }}
+          restore-keys: |
+            brew-${{ runner.os }}-${{ runner.arch }}-swiftlint-
+
+      - name: Install SwiftLint
+        run: brew list swiftlint &>/dev/null && brew link --overwrite swiftlint || brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging
