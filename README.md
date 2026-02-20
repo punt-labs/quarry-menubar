@@ -51,7 +51,7 @@ make format && make lint && make test
 
 ### Project Structure
 
-```
+```text
 QuarryMenuBar/
   App/                  # App entry point, lifecycle
   Models/               # Codable JSON models for API responses
@@ -70,7 +70,7 @@ The Xcode project is generated from `project.yml` and gitignored. New `.swift` f
 
 The app spawns `quarry serve --db <name>` as a subprocess and communicates over localhost HTTP. Port discovery works through a file at `~/.quarry/data/<db>/serve.port`.
 
-```
+```text
 QuarryMenuBarApp
   -> DaemonManager (spawns quarry serve, monitors health)
   -> DatabaseManager (discovers databases via quarry databases --json)

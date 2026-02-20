@@ -69,6 +69,7 @@ Version lives in `project.yml` (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`)
 ### App Lifecycle
 
 `QuarryMenuBarApp` → `MenuBarExtra(.window)` → `ContentPanel` → routes by `DaemonState`:
+
 - `.stopped` → Start button
 - `.starting` → ProgressView
 - `.running` → `SearchPanel` (the main UI)
@@ -111,6 +112,7 @@ The app uses Swift 5.9's `@Observable` macro (not the older `ObservableObject` p
 ### Syntax Highlighting
 
 `SyntaxHighlighter` renders `AttributedString` for display in both list rows and detail views:
+
 - **Python**: Regex-based color overlay (keywords, strings, comments, decorators) — keeps source text intact
 - **Markdown**: Strips syntax markers (`###`, backticks, `**`, `[text](url)`) and applies formatting (bold headers, monospace code, blue links) — renders clean prose
 - **Generic code**: C-family comment and string coloring
@@ -207,6 +209,7 @@ bd sync                                      # Sync with git remote
 #### Creating Issues for Discovered Work
 
 When you discover work that needs doing but isn't part of the current task:
+
 1. Create a beads issue immediately: `bd create --title="..." --type=task`
 2. Add dependencies if relevant: `bd dep add <new-issue> <blocking-issue>`
 3. Continue with current work

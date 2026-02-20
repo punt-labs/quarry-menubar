@@ -57,6 +57,7 @@ Alternatively, consider whether syntax highlighting in list rows is worth the co
 
 **R1.3 — Increase collection badge contrast.**
 Replace `.quaternary` background with a more visible style:
+
 ```swift
 // Before
 .background(.quaternary, in: Capsule())
@@ -85,6 +86,7 @@ The content area shifts vertically between states. When a search returns no resu
 ### Root Cause
 
 Three different alignment strategies are used:
+
 1. `.idle`: `VStack { Text(...).padding(.top, 24); Spacer() }` — **top-aligned**
 2. `.loading` / `.empty` / `.error`: `Spacer(); Content; Spacer()` or `ContentUnavailableView` — **center-aligned**
 3. `.results`: `List` — **fills from top**
@@ -138,6 +140,7 @@ The `TextField` uses `.focused($isSearchFocused)` which positions the cursor but
 **R3.2 — Remove the "x" clear button.** Spotlight does not have a clear button. Users clear via Cmd+A + Delete, or by holding Backspace. The clear button adds visual clutter and is an interaction pattern users don't expect in a search field.
 
 **R3.3 — Handle Escape key.**
+
 - First press: if detail view is showing, go back to results list
 - Second press (or first if on results list): clear search and dismiss panel
 
@@ -154,6 +157,7 @@ The `TextField` uses `.focused($isSearchFocused)` which positions the cursor but
 
 **R3.4 — Add keyboard navigation for results.**
 Use SwiftUI's `List(selection:)` binding with arrow key support:
+
 ```swift
 @State private var selectedResultID: SearchResult.ID?
 
@@ -172,6 +176,7 @@ This enables Up/Down arrow navigation, Enter to select, and visual highlight of 
 ### Problem
 
 Each result row shows four pieces of information:
+
 1. Document name (headline)
 2. Page number (caption2, right-aligned)
 3. Syntax-highlighted text preview (11pt, 3 lines)
@@ -188,7 +193,7 @@ Spotlight shows: **icon + title + subtitle** (2 lines max). The detail/preview a
 **R4.1 — Reduce row information to essentials.**
 Show only what's needed to identify and differentiate results:
 
-```
+```text
 [icon]  Document Name                    p.3
         First line of matching text...
 ```
@@ -261,6 +266,7 @@ The `.task` modifier on `DatabasePickerView` fires `loadDatabases()` on every vi
 ### Recommendations
 
 **R6.1 — Add a reentrancy guard.**
+
 ```swift
 func loadDatabases() async {
     guard !isDiscovering else { return }
@@ -274,6 +280,7 @@ The `defer` ensures `isDiscovering` resets even on cancellation or error.
 
 **R6.2 — Add a subprocess timeout.**
 Wrap the discovery call in a `Task` with a timeout:
+
 ```swift
 try await withThrowingTaskGroup(of: [DatabaseInfo].self) { group in
     group.addTask { try await self.discovery.discoverDatabases() }
@@ -301,6 +308,7 @@ If discovery takes longer than 5 seconds, replace "Loading..." with "Discovery t
 
 **R7.1 — Design a custom app icon.**
 The icon should evoke "quarry" (mining/excavation) combined with "search" (magnifying glass). Consider:
+
 - A pickaxe + magnifying glass
 - A stylized rock/gem with a search lens
 - A quarry pit silhouette (layered terraces) with a document icon
