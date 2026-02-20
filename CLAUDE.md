@@ -176,7 +176,7 @@ Key SwiftFormat settings:
 
 ### Issue Tracking with Beads
 
-This project uses **beads** (`bd`) for issue tracking, same as the parent ocr project. Beads is a git-native issue tracker stored in `.beads/issues.jsonl`.
+This project uses **beads** (`bd`) for issue tracking, same as the parent quarry project. Beads is a git-native issue tracker stored in `.beads/issues.jsonl`. If an issue discovered here affects multiple repos or requires a standards change, escalate to a [punt-kit bead](https://github.com/punt-labs/punt-kit) instead (see [bead placement scheme](../CLAUDE.md#where-to-create-a-bead)).
 
 ```bash
 bd ready --limit=99                          # Show ALL issues ready to work (default truncates)
