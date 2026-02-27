@@ -1,5 +1,10 @@
 # quarry-menubar
 
+[![License](https://img.shields.io/github/license/punt-labs/quarry-menubar)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/punt-labs/quarry-menubar/ci.yml?label=CI)](https://github.com/punt-labs/quarry-menubar/actions/workflows/ci.yml)
+[![Platform](https://img.shields.io/badge/platform-macOS_14+-black)](https://developer.apple.com/macos/)
+[![Swift](https://img.shields.io/badge/swift-5.9-F05138)](https://www.swift.org)
+
 macOS menu bar app for [Quarry](https://github.com/punt-labs/quarry) document search. Search your indexed documents from anywhere with a keyboard shortcut.
 
 ## What It Does
