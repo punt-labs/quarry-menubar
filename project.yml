@@ -12,7 +12,7 @@ options:
 
 packages:
   HighlightSwift:
-    url: https://github.com/jmf-pobox/HighlightSwift
+    url: https://github.com/punt-labs/HighlightSwift
     from: "1.1.0"
 
 settings:
