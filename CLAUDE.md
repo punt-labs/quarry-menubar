@@ -280,7 +280,7 @@ Use the GitHub MCP server tools for all GitHub operations (creating PRs, merging
 ### Pre-PR Checklist
 
 - [ ] **README updated** if user-facing behavior changed
-- [ ] **CHANGELOG entry** added for notable changes
+- [ ] **CHANGELOG entry included in the PR diff** for notable changes (not retroactively on main)
 - [ ] **Quality gates pass**: `make format && make lint && make test`
 - [ ] **Live demo** for features: launch against a real `quarry serve` instance and exercise the feature end-to-end
 
