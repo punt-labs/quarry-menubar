@@ -43,10 +43,29 @@ final class SearchViewModel {
 
     // MARK: Internal
 
-    private(set) var state: SearchState = .idle
     private(set) var availableCollections: [String] = []
 
     let client: QuarryClient
+
+    // MARK: - UI Coordination
+
+    //
+    // Maps to Z specification state variables (z-spec/docs/search-panel.tex):
+    //   selectedResult      → detail view target  (§5 line 89)
+    //   highlightedResultID → list cursor         (§5 line 90)
+    //
+
+    private(set) var selectedResult: SearchResult?
+    private(set) var highlightedResultID: SearchResult.ID?
+
+    private(set) var state: SearchState = .idle {
+        didSet {
+            if case .results = state {} else {
+                selectedResult = nil
+                highlightedResultID = nil
+            }
+        }
+    }
 
     var query: String = "" {
         didSet {
@@ -58,6 +77,8 @@ final class SearchViewModel {
         didSet {
             // Re-run the current search when filter changes
             if oldValue != selectedCollection {
+                selectedResult = nil
+                highlightedResultID = nil
                 search()
             }
         }
@@ -95,6 +116,31 @@ final class SearchViewModel {
         query = ""
         searchTask?.cancel()
         state = .idle
+        selectedResult = nil
+        highlightedResultID = nil
+    }
+
+    func selectResult(_ result: SearchResult) {
+        guard case let .results(results) = state,
+              results.contains(where: { $0.id == result.id }) else { return }
+        selectedResult = result
+        highlightedResultID = nil
+    }
+
+    func highlightResult(_ resultID: SearchResult.ID) {
+        guard selectedResult == nil,
+              case let .results(results) = state,
+              results.contains(where: { $0.id == resultID }) else { return }
+        highlightedResultID = resultID
+    }
+
+    func clearHighlight() {
+        highlightedResultID = nil
+    }
+
+    func closeDetail() {
+        selectedResult = nil
+        highlightedResultID = nil
     }
 
     func loadCollections() async {
@@ -117,6 +163,8 @@ final class SearchViewModel {
     private let logger = Logger(subsystem: "com.puntlabs.quarry-menubar", category: "SearchViewModel")
 
     private func debounceSearch() {
+        selectedResult = nil
+        highlightedResultID = nil
         debounceTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {

@@ -10,7 +10,7 @@ struct SearchPanel: View {
         VStack(spacing: 0) {
             searchField
             Divider()
-            if let selected = selectedResult {
+            if let selected = viewModel.selectedResult {
                 detailHeader(for: selected)
                 Divider()
                 ResultDetail(result: selected, client: viewModel.client)
@@ -25,16 +25,6 @@ struct SearchPanel: View {
         .onAppear {
             isSearchFocused = true
         }
-        .onChange(of: viewModel.query) { _, newQuery in
-            if newQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                selectedResult = nil
-                selectedResultID = nil
-            }
-        }
-        .onChange(of: viewModel.selectedCollection) { _, _ in
-            selectedResult = nil
-            selectedResultID = nil
-        }
     }
 
     // MARK: Private
@@ -45,9 +35,6 @@ struct SearchPanel: View {
     /// Upward uses a point slightly below viewport top so partially-visible
     /// items fully clear sticky section headers and list chrome.
     private static let scrollAnchorUp = UnitPoint(x: 0.5, y: 0.15)
-
-    @State private var selectedResult: SearchResult?
-    @State private var selectedResultID: SearchResult.ID?
 
     @State private var scrollAnchor: UnitPoint = .top
     @FocusState private var isSearchFocused: Bool
@@ -89,10 +76,10 @@ struct SearchPanel: View {
                 .font(.body)
                 .focused($isSearchFocused)
                 .onSubmit {
-                    if let id = selectedResultID,
+                    if let id = viewModel.highlightedResultID,
                        case let .results(results) = viewModel.state,
                        let result = results.first(where: { $0.id == id }) {
-                        selectedResult = result
+                        viewModel.selectResult(result)
                     } else {
                         viewModel.search()
                     }
@@ -101,10 +88,10 @@ struct SearchPanel: View {
                     handleEscape()
                 }
                 .onKeyPress(.downArrow) {
-                    selectedResult == nil ? moveSelection(by: 1) : .ignored
+                    viewModel.selectedResult == nil ? moveSelection(by: 1) : .ignored
                 }
                 .onKeyPress(.upArrow) {
-                    selectedResult == nil ? moveSelection(by: -1) : .ignored
+                    viewModel.selectedResult == nil ? moveSelection(by: -1) : .ignored
                 }
         }
         .padding(10)
@@ -145,13 +132,13 @@ struct SearchPanel: View {
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
                                 .listRowBackground(
-                                    result.id == selectedResultID
+                                    result.id == viewModel.highlightedResultID
                                         ? Color.accentColor.opacity(0.2)
                                         : Color.clear
                                 )
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    selectedResult = result
+                                    viewModel.selectResult(result)
                                 }
                             }
                         } header: {
@@ -163,7 +150,7 @@ struct SearchPanel: View {
                     }
                 }
                 .listStyle(.plain)
-                .onChange(of: selectedResultID) { _, newID in
+                .onChange(of: viewModel.highlightedResultID) { _, newID in
                     guard let newID else { return }
                     let ordered = flatResults(from: results)
                     if newID == ordered.first?.id {
@@ -210,7 +197,7 @@ struct SearchPanel: View {
     private func detailHeader(for result: SearchResult) -> some View {
         HStack {
             Button {
-                selectedResult = nil
+                viewModel.closeDetail()
             } label: {
                 Label("Back", systemImage: "chevron.left")
                     .font(.subheadline)
@@ -233,10 +220,10 @@ struct SearchPanel: View {
     }
 
     private func handleEscape() {
-        if selectedResult != nil {
-            selectedResult = nil
-        } else if selectedResultID != nil {
-            selectedResultID = nil
+        if viewModel.selectedResult != nil {
+            viewModel.closeDetail()
+        } else if viewModel.highlightedResultID != nil {
+            viewModel.clearHighlight()
         } else {
             viewModel.clear()
             NSApp.keyWindow?.close()
@@ -249,15 +236,17 @@ struct SearchPanel: View {
         guard !ordered.isEmpty else { return .ignored }
 
         scrollAnchor = offset > 0 ? .bottom : Self.scrollAnchorUp
-        if let currentID = selectedResultID,
+        if let currentID = viewModel.highlightedResultID,
            let currentIndex = ordered.firstIndex(where: { $0.id == currentID }) {
             let newIndex = currentIndex + offset
             if ordered.indices.contains(newIndex) {
-                selectedResultID = ordered[newIndex].id
+                viewModel.highlightResult(ordered[newIndex].id)
             }
         } else {
             // Nothing selected — Down selects first, Up selects last
-            selectedResultID = offset > 0 ? ordered.first?.id : ordered.last?.id
+            if let id = offset > 0 ? ordered.first?.id : ordered.last?.id {
+                viewModel.highlightResult(id)
+            }
         }
         return .handled
     }
