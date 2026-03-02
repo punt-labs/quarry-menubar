@@ -1,9 +1,7 @@
 // Tests derived from the Z specification in z-spec/docs/search-panel.tex.
 //
-// Each test maps to a specific schema or invariant. Tests against the current
-// implementation's gaps are expected to **fail** (TDD red phase). The Z spec
-// line numbers are cited so reviewers can trace each assertion to its formal
-// source.
+// Each test maps to a specific schema or invariant. The Z spec line numbers
+// are cited so reviewers can trace each assertion to its formal source.
 //
 // Z spec state mapping:
 //   queryEmpty          → viewModel.query.isEmpty
@@ -70,13 +68,32 @@ final class SearchCoordinationTests: XCTestCase {
     /// ProgrammaticClear (lines 304–312): must reset everything regardless of
     /// current query value. This is the bug: if query is already empty, the
     /// reactive onChange handler never fires.
-    func testProgrammaticClearWhenQueryAlreadyEmpty() {
-        let vm = SearchViewModel()
-        let result = makeResult()
+    func testProgrammaticClearWhenQueryAlreadyEmpty() async throws {
+        let vm = try await viewModelWithResults()
+        let result = try firstResult(from: vm)
         vm.selectResult(result)
         XCTAssertNotNil(vm.selectedResult)
 
-        // Query is already "" — clear() assigns "" again
+        // Drain query to empty, then call clear() again while already empty
+        vm.clear()
+        XCTAssertNil(vm.selectedResult, "Precondition: first clear resets")
+
+        // Simulate stale selection set via a new search cycle
+        MockURLProtocol.requestHandler = { _ in
+            jsonResponse(
+                #"{"query":"x","total_results":1,"results":[{"document_name":"doc-0","collection":"test","page_number":1,"chunk_index":0,"text":"T","page_type":"content","source_format":".md","similarity":0.9}]}"#
+            )
+        }
+        vm.query = "x"
+        vm.search()
+        try await Task.sleep(for: .milliseconds(150))
+        let r2 = try firstResult(from: vm)
+        vm.selectResult(r2)
+        XCTAssertNotNil(vm.selectedResult)
+
+        // Now clear to empty, then clear() again — query is already ""
+        vm.clear()
+        vm.selectResult(r2) // Should be rejected: state is idle
         vm.clear()
 
         XCTAssertNil(
@@ -132,23 +149,23 @@ final class SearchCoordinationTests: XCTestCase {
         )
     }
 
-    func testSelectedResultClearedWhenSearchReturnsEmpty() async throws {
+    func testSelectedResultClearedWhenStateTransitionsToEmpty() async throws {
         let vm = try await viewModelWithResults()
         let result = try firstResult(from: vm)
         vm.selectResult(result)
         XCTAssertNotNil(vm.selectedResult)
 
-        // New search returns empty
+        // Same query, but server now returns empty — tests state didSet path
         MockURLProtocol.requestHandler = { _ in
-            jsonResponse(#"{"query":"other","total_results":0,"results":[]}"#)
+            jsonResponse(#"{"query":"test","total_results":0,"results":[]}"#)
         }
-        vm.query = "other"
         vm.search()
         try await Task.sleep(for: .milliseconds(150))
 
+        XCTAssertEqual(vm.state, .empty("test"))
         XCTAssertNil(
             vm.selectedResult,
-            "Z spec line 115: search completing with no results clears selection"
+            "Z spec line 115: state leaving .results clears selection"
         )
     }
 
@@ -243,12 +260,12 @@ final class SearchCoordinationTests: XCTestCase {
 
     func testCloseDetailClearsHighlight() async throws {
         let vm = try await viewModelWithResults()
-        let results = try allResults(from: vm)
-        try requireMinimumResults(results, count: 2)
+        let result = try firstResult(from: vm)
 
-        // Stub doesn't enforce mutual exclusion, so both can be set
-        vm.highlightResult(results[0].id)
-        vm.selectResult(results[1])
+        // Set a highlight (no detail open), then call closeDetail
+        vm.highlightResult(result.id)
+        XCTAssertNotNil(vm.highlightedResultID)
+
         vm.closeDetail()
 
         XCTAssertNil(
