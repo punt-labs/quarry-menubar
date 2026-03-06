@@ -335,3 +335,7 @@ The app auto-starts `quarry serve` for the persisted database (default: "default
 ```bash
 cd ../ocr && uv tool install --force .
 ```
+
+## Scratch Files
+
+Use `.tmp/` at the project root for scratch and temporary files — never `/tmp`. The `TMPDIR` environment variable is set via `.envrc` so that `tempfile` and subprocesses automatically use it. Contents are gitignored; only `.gitkeep` is tracked.

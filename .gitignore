@@ -40,3 +40,6 @@ Package.resolved
 # Test artifacts
 *.xcresult
 .envrc
+
+# Scratch/temp directory (TMPDIR set via .envrc)
+.tmp/
