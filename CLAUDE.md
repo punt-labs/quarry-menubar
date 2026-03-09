@@ -277,25 +277,36 @@ Format: `type(scope): description`
 
 Use the GitHub MCP server tools for all GitHub operations (creating PRs, merging, reading PR comments, issues). Git operations (commit, push, branch) use the Bash tool.
 
+### Documentation Discipline
+
+Three documents track different aspects of the project. Each has a clear trigger for when it must be updated — if the trigger fires and the PR diff does not include the update, the PR is not ready to merge.
+
+**CHANGELOG.md** — Entries are written in the PR branch, before merge — not retroactively on main. If a PR changes user-facing behavior and the diff does not include a CHANGELOG entry, the PR is not ready to merge. Follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. Add entries under `## [Unreleased]`. Categories: Added, Changed, Deprecated, Removed, Fixed, Security.
+
+**README.md** — Update when user-facing behavior changes: new flags, commands, defaults, configuration options, or changed workflows. The README is the first thing a user reads; it must reflect the current state of the software, not a past version.
+
+**prfaq.tex** — Update when a change shifts product direction or validates/invalidates a risk assumption from the PR/FAQ. The PR/FAQ lives in the `../prfaq/` repo; cross-repo updates can be tracked with a punt-kit bead if they can't land in the same session.
+
 ### Pre-PR Checklist
 
+- [ ] **CHANGELOG entry** in the PR diff (see Documentation Discipline above)
 - [ ] **README updated** if user-facing behavior changed
-- [ ] **CHANGELOG entry included in the PR diff** for notable changes (not retroactively on main)
+- [ ] **PR/FAQ updated** if product direction or risk assumptions shifted
 - [ ] **Quality gates pass**: `make format && make lint && make test`
 - [ ] **Live demo** for features: launch against a real `quarry serve` instance and exercise the feature end-to-end
 
-### Pull Request and Code Review Workflow
+### Code Review Flow
 
-Do **not** merge immediately after creating a PR. The full flow is:
+Do **not** merge immediately after creating a PR. Expect **2–6 review cycles** before merging.
 
-1. **Create PR** — Push branch, open PR (via GitHub MCP tools).
-2. **Trigger GitHub Copilot code review** — Request review so Copilot analyzes the diff.
-3. **Wait for feedback** — Allow time for review comments and suggestions.
-4. **Evaluate feedback** — Read each comment; decide which are valid and actionable.
-5. **Address valid issues** — Commit fixes; push; ensure quality gates pass on each change.
-6. **Merge only when** — All review feedback has been evaluated (addressed or explicitly declined), and local quality gates (`make format && make lint && make test`) run clean.
-
-**Quality gates apply at every step:** Each commit that addresses review feedback must pass quality gates. Do not merge if any check is failing.
+1. **Create PR** — push branch, open PR via `mcp__github__create_pull_request`. Prefer MCP GitHub tools over `gh` CLI.
+2. **Request Copilot review** — use `mcp__github__request_copilot_review`.
+3. **Watch for feedback in the background** — `gh pr checks <number> --watch` (run in background). Do not stop waiting. Copilot and Bugbot may take 1–3 minutes after CI completes.
+4. **Read all feedback** via MCP: `mcp__github__pull_request_read` with `get_reviews` and `get_review_comments`.
+5. **Take every comment seriously.** Do not dismiss feedback as "unrelated to the change" or "pre-existing." If you disagree, explain why in a reply.
+6. **Fix and re-push** — commit fixes, push, re-run quality gates.
+7. **Repeat steps 3–6** until the latest review is **uneventful** — zero new comments, all checks green.
+8. **Merge only when the last review was clean** — use `mcp__github__merge_pull_request` (not `gh pr merge`).
 
 ### Session Close Protocol
 
