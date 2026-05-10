@@ -351,7 +351,7 @@ cd ../ocr && uv tool install --force .
 
 Identity: `agent: claude` per `.punt-labs/ethos.yaml`. Sub-agent calls (`Agent(subagent_type=…)`) match ethos identity handles.
 
-quarry-menubar is a native macOS Swift/SwiftUI menu-bar app that drives a `quarry serve` subprocess and renders results. Three concerns: (1) Swift/SwiftUI implementation discipline (XcodeGen, SwiftFormat/Lint, @Observable MVVM); (2) the cross-process integration with the quarry HTTP backend (port discovery, lifecycle, executable resolution); (3) macOS-specific surface (menu bar, hotkeys, Dock-less UIElement, sandbox config). Worker and evaluator must be distinct handles with no shared role. Claude is the leader, never the evaluator.
+quarry-menubar is a native macOS Swift/SwiftUI menu-bar app that drives a `quarry serve` subprocess and renders results. Three concerns: (1) Swift/SwiftUI implementation discipline (XcodeGen, SwiftFormat/Lint, @Observable MVVM); (2) the cross-process integration with the quarry HTTP backend (port discovery, lifecycle, executable resolution); (3) macOS-specific surface (menu bar, hotkeys, Dock-less UIElement, sandbox config). Within each row, the worker and evaluator must be distinct handles. Claude is the leader, never the evaluator.
 
 | Task type | Worker | Evaluator |
 |-----------|--------|-----------|
