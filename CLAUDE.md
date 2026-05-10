@@ -347,6 +347,28 @@ The app auto-starts `quarry serve` for the persisted database (default: "default
 cd ../ocr && uv tool install --force .
 ```
 
+## Ethos & Delegation
+
+Identity: `agent: claude` per `.punt-labs/ethos.yaml`. Sub-agent calls (`Agent(subagent_type=…)`) match ethos identity handles.
+
+quarry-menubar is a native macOS Swift/SwiftUI menu-bar app that drives a `quarry serve` subprocess and renders results. Three concerns: (1) Swift/SwiftUI implementation discipline (XcodeGen, SwiftFormat/Lint, @Observable MVVM); (2) the cross-process integration with the quarry HTTP backend (port discovery, lifecycle, executable resolution); (3) macOS-specific surface (menu bar, hotkeys, Dock-less UIElement, sandbox config). Within each row, the worker and evaluator must be distinct handles. Claude is the leader, never the evaluator.
+
+| Task type | Worker | Evaluator |
+|-----------|--------|-----------|
+| Swift/SwiftUI view code, MVVM, @Observable | `csl` (Lattner) | `srn` (Naroff) |
+| Concurrency, Sendable, @MainActor boundaries | `srn` | `csl` |
+| XcodeGen `project.yml`, build settings, schemes | `csl` | `adb` (Lovelace) |
+| SwiftFormat / SwiftLint config alignment | `csl` | `mdm` (Pike) |
+| Daemon lifecycle (`Process`, port file, health check) | `srn` | `bwk` (Pike — Go context for cross-process patterns) |
+| HTTP client / Codable / API contract with quarry | `srn` | `rmh` (Hettinger) |
+| Executable resolution / install-path search | `csl` | `adb` |
+| Hotkey / NSEvent monitor / global accessibility | `srn` | `dna` (Norman) |
+| Visual / menu-bar UX / search panel layout | `dna` | `edt` (Tufte) |
+| Syntax highlighting / `AttributedString` rendering | `csl` | `dna` |
+| Cross-repo coordination with `quarry` HTTP API | `srn` | `rmh` |
+
+Use the `standard` pipeline for new views, new endpoints, or daemon-lifecycle changes. Use `quick` for SwiftLint fixes or single-file refactors. The "Live demo" Pre-PR check is non-negotiable — every feature must be exercised against a real `quarry serve` before review.
+
 ## Scratch Files
 
 Use `.tmp/` at the project root for scratch and temporary files — never `/tmp`. The `TMPDIR` environment variable is set via `.envrc` so that `tempfile` and subprocesses automatically use it. Contents are gitignored; only `.gitkeep` is tracked.
