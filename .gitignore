@@ -42,4 +42,7 @@ Package.resolved
 
 # Scratch/temp directory (TMPDIR set via .envrc)
 .tmp/
-.envrc.local
+
+# Local-only files (machine-specific, per-user)
+*.local
+*.local.*
