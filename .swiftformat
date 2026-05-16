@@ -33,6 +33,7 @@
 --enable organizeDeclarations
 
 --disable redundantReturn
+--disable redundantSendable
 --disable blankLinesAtEndOfScope
 --disable blankLinesAtStartOfScope
 --disable trailingCommas

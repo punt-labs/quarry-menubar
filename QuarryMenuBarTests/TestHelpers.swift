@@ -1,4 +1,5 @@
 import Foundation
+@testable import QuarryMenuBar
 import XCTest
 
 // MARK: - MockURLProtocol
@@ -18,7 +19,9 @@ final class MockURLProtocol: URLProtocol {
 
     override func startLoading() {
         guard let handler = MockURLProtocol.requestHandler else {
-            XCTFail("No request handler set")
+            let requestURL = request.url?.absoluteString ?? "unknown request"
+            XCTFail("No request handler set for \(requestURL)")
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }
         do {
@@ -36,26 +39,62 @@ final class MockURLProtocol: URLProtocol {
 
 // MARK: - Helpers
 
+private let defaultTestURL = URL(string: "http://127.0.0.1:9999") ?? URL(fileURLWithPath: "/")
+
 func mockSession() -> URLSession {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [MockURLProtocol.self]
     return URLSession(configuration: config)
 }
 
-// swiftlint:disable force_unwrapping
+func testProfile(
+    baseURL: URL = defaultTestURL,
+    mode: ConnectionMode = .local,
+    origin: ConnectionOrigin = .localDefault,
+    caCertificateURL: URL? = nil,
+    authToken: String? = nil,
+    hostDisplayName: String = "localhost"
+) -> ConnectionProfile {
+    ConnectionProfile(
+        mode: mode,
+        origin: origin,
+        baseURL: baseURL,
+        caCertificateURL: caCertificateURL,
+        authToken: authToken,
+        hostDisplayName: hostDisplayName
+    )
+}
+
+func mockClient(
+    profile: ConnectionProfile = testProfile(),
+    session: URLSession = mockSession()
+) throws -> QuarryClient {
+    try QuarryClient(profile: profile, session: session)
+}
+
+// MARK: - StubProfileLoader
+
+struct StubProfileLoader: ConnectionProfileLoading {
+    let loadBlock: () throws -> ConnectionProfile
+
+    func load() throws -> ConnectionProfile {
+        try loadBlock()
+    }
+}
+
 func jsonResponse(
     _ json: String,
-    statusCode: Int = 200
+    statusCode: Int = 200,
+    url: URL = defaultTestURL
 ) -> (Data, HTTPURLResponse) {
-    let url = URL(string: "http://127.0.0.1:9999")!
-    let data = json.data(using: .utf8)!
-    let response = HTTPURLResponse(
+    let data = Data(json.utf8)
+    guard let response = HTTPURLResponse(
         url: url,
         statusCode: statusCode,
         httpVersion: nil,
         headerFields: nil
-    )!
+    ) else {
+        preconditionFailure("Failed to create HTTPURLResponse for \(url)")
+    }
     return (data, response)
 }
-
-// swiftlint:enable force_unwrapping

@@ -1,0 +1,54 @@
+import Foundation
+
+// MARK: - ConnectionMode
+
+enum ConnectionMode: String, Equatable, Sendable {
+    case local
+    case remote
+}
+
+// MARK: - ConnectionOrigin
+
+enum ConnectionOrigin: String, Equatable, Sendable {
+    case localDefault
+    case proxyConfig
+}
+
+// MARK: - ConnectionProfile
+
+struct ConnectionProfile: Equatable, Sendable {
+    let mode: ConnectionMode
+    let origin: ConnectionOrigin
+    let baseURL: URL
+    let caCertificateURL: URL?
+    let authToken: String?
+    let hostDisplayName: String
+
+    var allowsLocalFileAccess: Bool {
+        mode == .local
+    }
+
+    var displayName: String {
+        switch mode {
+        case .local:
+            "Local"
+        case .remote:
+            hostDisplayName
+        }
+    }
+
+    var usesTLS: Bool {
+        baseURL.scheme?.lowercased() == "https"
+    }
+
+}
+
+// MARK: - ConnectionState
+
+enum ConnectionState: Equatable, Sendable {
+    case idle
+    case connecting
+    case connected
+    case unavailable(String)
+    case misconfigured(String)
+}

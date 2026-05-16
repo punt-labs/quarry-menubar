@@ -1,33 +1,46 @@
 import HighlightSwift
 import SwiftUI
 
-/// Root content view for the menu bar panel.
-///
-/// Manages daemon lifecycle (start on appear, stop on disappear)
-/// and routes to the appropriate view based on daemon state.
 struct ContentPanel: View {
 
     // MARK: Internal
 
-    let daemon: DaemonManager
-
-    @Bindable var searchViewModel: SearchViewModel
-
-    let databaseManager: DatabaseManager
-    let onDatabaseSwitch: (String) -> Void
+    let connectionManager: ConnectionManager
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            statusContent
-                .animation(.easeInOut(duration: 0.15), value: daemon.state)
+            content
+                .animation(.easeInOut(duration: 0.15), value: connectionManager.state)
             Divider()
             footer
         }
         .preferredColorScheme(activeThemeIsDark ? .dark : .light)
         .task {
-            daemon.start()
+            if case .idle = connectionManager.state {
+                await connectionManager.refresh()
+            }
+        }
+    }
+
+    static func unavailableHint(for mode: ConnectionMode?) -> String {
+        switch mode {
+        case .remote:
+            "Check that the remote Quarry server is reachable and that its pinned CA and token are still valid."
+        case .local,
+             .none:
+            "Run `quarry install` to set up local Quarry, or run `quarry login <host> --api-key <token>` to point Quarry at a remote server. You can also set `QUARRY_API_KEY` before running `quarry login <host>`."
+        }
+    }
+
+    static func configurationHint(for origin: ConnectionOrigin?) -> String {
+        switch origin {
+        case .proxyConfig:
+            "Fix `~/.punt-labs/mcp-proxy/quarry.toml`, rerun `quarry login <host> --api-key <token>` (or set `QUARRY_API_KEY` first), or run `quarry logout` if you want the app to return to local Quarry."
+        case .localDefault,
+             .none:
+            "Run `quarry install` to create the local TLS certificates and daemon, or run `quarry login <host> --api-key <token>` to use a remote server. You can also set `QUARRY_API_KEY` before running `quarry login <host>`."
         }
     }
 
@@ -65,16 +78,31 @@ struct ContentPanel: View {
         }?.isDark ?? false
     }
 
+    private var unavailableHint: String {
+        Self.unavailableHint(for: connectionManager.profile?.mode)
+    }
+
+    private var configurationHint: String {
+        Self.configurationHint(
+            for: connectionManager.profile?.origin ?? connectionManager.failureOrigin
+        )
+    }
+
     private var header: some View {
         HStack {
             Image(systemName: "doc.text.magnifyingglass")
                 .foregroundStyle(.secondary)
             Text("Quarry")
                 .font(.headline)
-            DatabasePickerView(
-                databaseManager: databaseManager,
-                onSwitch: onDatabaseSwitch
-            )
+            if let profile = connectionManager.profile {
+                pillLabel(
+                    profile.displayName,
+                    systemImage: profile.mode == .local ? "desktopcomputer" : "network"
+                )
+            }
+            if let databaseName = connectionManager.activeDatabaseName {
+                pillLabel(databaseName, systemImage: "internaldrive")
+            }
             Spacer()
             themeMenu
             statusBadge
@@ -108,70 +136,91 @@ struct ContentPanel: View {
 
     @ViewBuilder
     private var statusBadge: some View {
-        switch daemon.state {
-        case .stopped:
-            statusLabel("Stopped", systemImage: "circle", iconStyle: .secondary)
-        case .starting:
-            statusLabel("Starting…", systemImage: "circle.dotted", iconStyle: .orange)
-        case .running:
-            statusLabel("Running", systemImage: "circle.fill", iconStyle: .green)
-        case let .error(message):
-            statusLabel(message, systemImage: "exclamationmark.triangle.fill", iconStyle: .red)
-                .lineLimit(1)
+        switch connectionManager.state {
+        case .idle,
+             .connecting:
+            statusLabel("Connecting…", systemImage: "circle.dotted", iconStyle: .orange)
+        case .connected:
+            statusLabel("Connected", systemImage: "circle.fill", iconStyle: .green)
+        case .unavailable:
+            statusLabel("Unavailable", systemImage: "exclamationmark.triangle.fill", iconStyle: .red)
+        case .misconfigured:
+            statusLabel("Config Error", systemImage: "wrench.and.screwdriver.fill", iconStyle: .orange)
         }
     }
 
     @ViewBuilder
-    private var statusContent: some View {
-        switch daemon.state {
-        case .stopped:
-            VStack(spacing: 12) {
-                Image(systemName: "stop.circle")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.secondary)
-                Text("Backend Stopped")
-                    .font(.headline)
-                Text("The search backend is not running.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Button("Start") {
-                    daemon.start()
-                }
-                .buttonStyle(.borderedProminent)
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, Self.emptyStateTopPadding)
-        case .starting:
+    private var content: some View {
+        switch connectionManager.state {
+        case .idle,
+             .connecting:
             VStack(spacing: 8) {
-                ProgressView("Starting Quarry…")
-                Text("Launching the search backend.")
+                ProgressView("Connecting to Quarry…")
+                Text("Resolving the active Quarry connection.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
             }
             .frame(maxWidth: .infinity)
             .padding(.top, Self.emptyStateTopPadding)
-        case .running:
-            SearchPanel(viewModel: searchViewModel)
-        case let .error(message):
-            ErrorStateView(message: message) {
-                daemon.restart()
+        case .connected:
+            if let searchViewModel = connectionManager.searchViewModel {
+                SearchPanel(
+                    viewModel: searchViewModel,
+                    allowsFinderReveal: connectionManager.allowsLocalFileAccess
+                )
+            } else {
+                ProgressView("Preparing search…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        case let .unavailable(message):
+            ErrorStateView(
+                title: "Quarry Unavailable",
+                message: message,
+                hint: unavailableHint,
+                retryLabel: "Retry"
+            ) {
+                Task { await connectionManager.refresh() }
+            }
+        case let .misconfigured(message):
+            ErrorStateView(
+                title: "Quarry Configuration",
+                message: message,
+                hint: configurationHint,
+                retryLabel: "Reload Config"
+            ) {
+                Task { await connectionManager.refresh() }
             }
         }
     }
 
     private var footer: some View {
         HStack {
+            Button("Refresh") {
+                Task { await connectionManager.refresh() }
+            }
+            .buttonStyle(.plain)
+            .disabled(connectionManager.state == .connecting)
+            Spacer()
             Button("Quit") {
-                daemon.stop()
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
-            Spacer()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private func pillLabel(
+        _ title: String,
+        systemImage: String
+    ) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.quaternary.opacity(0.4), in: Capsule())
     }
 
     private func statusLabel(

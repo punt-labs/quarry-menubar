@@ -30,7 +30,7 @@ struct SearchResponse: Codable, Sendable {
 
 // MARK: - SearchResult
 
-struct SearchResult: Codable, Sendable, Identifiable {
+struct SearchResult: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case documentName = "document_name"
         case collection
@@ -39,6 +39,9 @@ struct SearchResult: Codable, Sendable, Identifiable {
         case text
         case pageType = "page_type"
         case sourceFormat = "source_format"
+        case agentHandle = "agent_handle"
+        case memoryType = "memory_type"
+        case summary
         case similarity
     }
 
@@ -49,6 +52,9 @@ struct SearchResult: Codable, Sendable, Identifiable {
     let text: String
     let pageType: String
     let sourceFormat: String
+    let agentHandle: String?
+    let memoryType: String?
+    let summary: String?
     let similarity: Double
 
     var id: String {
@@ -72,7 +78,7 @@ struct DocumentsResponse: Codable, Sendable {
 
 // MARK: - DocumentInfo
 
-struct DocumentInfo: Codable, Sendable, Identifiable {
+struct DocumentInfo: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case documentName = "document_name"
         case documentPath = "document_path"
@@ -112,7 +118,7 @@ struct CollectionsResponse: Codable, Sendable {
 
 // MARK: - CollectionInfo
 
-struct CollectionInfo: Codable, Sendable, Identifiable {
+struct CollectionInfo: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case collection
         case documentCount = "document_count"
@@ -136,19 +142,72 @@ struct StatusResponse: Codable, Sendable {
         case documentCount = "document_count"
         case collectionCount = "collection_count"
         case chunkCount = "chunk_count"
+        case registeredDirectories = "registered_directories"
         case databasePath = "database_path"
         case databaseSizeBytes = "database_size_bytes"
         case embeddingModel = "embedding_model"
+        case provider
         case embeddingDimension = "embedding_dimension"
     }
 
     let documentCount: Int
     let collectionCount: Int
     let chunkCount: Int
+    let registeredDirectories: Int?
     let databasePath: String
     let databaseSizeBytes: Int
     let embeddingModel: String
+    let provider: String?
     let embeddingDimension: Int
+
+}
+
+// MARK: - DatabasesResponse
+
+struct DatabasesResponse: Codable, Sendable {
+    enum CodingKeys: String, CodingKey {
+        case totalDatabases = "total_databases"
+        case databases
+    }
+
+    let totalDatabases: Int
+    let databases: [DatabaseSummary]
+
+}
+
+// MARK: - DatabaseSummary
+
+struct DatabaseSummary: Codable, Identifiable, Equatable, Sendable {
+    enum CodingKeys: String, CodingKey {
+        case name
+        case documentCount = "document_count"
+        case sizeBytes = "size_bytes"
+        case sizeDescription = "size_description"
+    }
+
+    let name: String
+    let documentCount: Int
+    let sizeBytes: Int
+    let sizeDescription: String
+
+    var id: String {
+        name
+    }
+
+}
+
+// MARK: - ShowPageResponse
+
+struct ShowPageResponse: Codable, Sendable {
+    enum CodingKeys: String, CodingKey {
+        case documentName = "document_name"
+        case pageNumber = "page_number"
+        case text
+    }
+
+    let documentName: String
+    let pageNumber: Int
+    let text: String
 
 }
 

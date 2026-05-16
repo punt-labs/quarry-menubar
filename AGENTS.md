@@ -9,7 +9,7 @@ bd ready --limit=99   # Find available work (show all)
 bd show <id>          # View issue details
 bd update <id> --status in_progress  # Claim work
 bd close <id>         # Complete work
-bd sync               # Sync with git
+bd vc status          # Inspect beads database VC state
 ```
 
 ## Workflow Tiers
@@ -40,8 +40,9 @@ Follow the protocol in CLAUDE.md. The short version:
 4. **Push to remote** — work is NOT complete until `git push` succeeds:
 
    ```bash
-   git pull --rebase
-   bd sync
+   git push -u origin <branch>  # first push on a new branch
+   # OR
+   git pull --rebase            # if branch already tracks a remote
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -55,7 +56,7 @@ Follow the protocol in CLAUDE.md. The short version:
 - NEVER say "ready to push when you are" — YOU must push
 - If push fails, resolve and retry until it succeeds
 
-**PR workflow (see CLAUDE.md):** Do NOT merge a PR immediately. Trigger GitHub Copilot code review, wait for feedback, evaluate and address valid issues, ensure quality gates pass, then merge.
+**PR workflow (see CLAUDE.md):** Before opening a PR, run local review agents on the full diff, complete the live demo, and ensure quality gates pass. Then open the PR, trigger GitHub Copilot review, address valid feedback, and merge only after the latest review is clean.
 
 ## Landing the Plane (Session Completion)
 
@@ -69,8 +70,9 @@ Follow the protocol in CLAUDE.md. The short version:
 4. **PUSH TO REMOTE** - This is MANDATORY:
 
    ```bash
-   git pull --rebase
-   bd sync
+   git push -u origin <branch>  # first push on a new branch
+   # OR
+   git pull --rebase            # if branch already tracks a remote
    git push
    git status  # MUST show "up to date with origin"
    ```

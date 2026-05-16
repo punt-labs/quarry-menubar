@@ -20,13 +20,18 @@ final class SearchCoordinationTests: XCTestCase {
 
     // MARK: - Init (Z spec: Init schema, lines 127–135)
 
-    func testInitSelectedResultIsNil() {
-        let vm = SearchViewModel()
+    override func tearDown() {
+        MockURLProtocol.requestHandler = nil
+        super.tearDown()
+    }
+
+    func testInitSelectedResultIsNil() throws {
+        let vm = try makeIdleViewModel()
         XCTAssertNil(vm.selectedResult)
     }
 
-    func testInitHighlightedResultIDIsNil() {
-        let vm = SearchViewModel()
+    func testInitHighlightedResultIDIsNil() throws {
+        let vm = try makeIdleViewModel()
         XCTAssertNil(vm.highlightedResultID)
     }
 
@@ -108,8 +113,8 @@ final class SearchCoordinationTests: XCTestCase {
     // selectedResult ⊆ results
     // highlightedResult ⊆ results
 
-    func testSelectResultRejectsResultNotInResults() {
-        let vm = SearchViewModel()
+    func testSelectResultRejectsResultNotInResults() throws {
+        let vm = try makeIdleViewModel()
         XCTAssertEqual(vm.state, .idle)
 
         let orphan = makeResult(name: "not-in-results")
@@ -121,8 +126,8 @@ final class SearchCoordinationTests: XCTestCase {
         )
     }
 
-    func testHighlightRejectsIDNotInResults() {
-        let vm = SearchViewModel()
+    func testHighlightRejectsIDNotInResults() throws {
+        let vm = try makeIdleViewModel()
         XCTAssertEqual(vm.state, .idle)
 
         vm.highlightResult("nonexistent-id")
@@ -138,8 +143,8 @@ final class SearchCoordinationTests: XCTestCase {
     //
     // searchState ≠ hasResults ⟹ selectedResult = ∅
 
-    func testNoSelectionWhenStateIsIdle() {
-        let vm = SearchViewModel()
+    func testNoSelectionWhenStateIsIdle() throws {
+        let vm = try makeIdleViewModel()
         let result = makeResult()
         vm.selectResult(result)
 
@@ -285,8 +290,8 @@ final class SearchCoordinationTests: XCTestCase {
         XCTAssertEqual(vm.highlightedResultID, result.id)
     }
 
-    func testHighlightRequiresHasResultsState() {
-        let vm = SearchViewModel()
+    func testHighlightRequiresHasResultsState() throws {
+        let vm = try makeIdleViewModel()
         // idle state — no results exist
         vm.highlightResult("some-id")
 
@@ -408,6 +413,9 @@ final class SearchCoordinationTests: XCTestCase {
             text: "Sample text for \(name)",
             pageType: "content",
             sourceFormat: ".md",
+            agentHandle: nil,
+            memoryType: nil,
+            summary: nil,
             similarity: 0.95
         )
     }
@@ -446,7 +454,7 @@ final class SearchCoordinationTests: XCTestCase {
 
     /// Creates a SearchViewModel with mock results already loaded.
     private func viewModelWithResults(count: Int = 3) async throws -> SearchViewModel {
-        let (client, _) = try mockClient()
+        let client = try mockClient()
         let items = (0 ..< count).map { i in
             #"{"document_name":"doc-\#(i)","collection":"test","page_number":1,"chunk_index":0,"text":"Text \#(i)","page_type":"content","source_format":".md","similarity":0.9\#(i)}"#
         }
@@ -464,28 +472,7 @@ final class SearchCoordinationTests: XCTestCase {
         return vm
     }
 
-    /// Creates a QuarryClient with a mock session and temporary port file.
-    private func mockClient() throws -> (QuarryClient, URL) {
-        let quarryDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".quarry")
-            .appendingPathComponent("data")
-            .appendingPathComponent("coord-test-\(UUID())")
-        try FileManager.default.createDirectory(
-            at: quarryDir,
-            withIntermediateDirectories: true
-        )
-        let portFile = quarryDir.appendingPathComponent("serve.port")
-        try "9999".write(to: portFile, atomically: true, encoding: .utf8)
-        addTeardownBlock { try? FileManager.default.removeItem(at: quarryDir) }
-
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
-        let session = URLSession(configuration: config)
-
-        let client = QuarryClient(
-            databaseName: quarryDir.lastPathComponent,
-            session: session
-        )
-        return (client, quarryDir)
+    private func makeIdleViewModel() throws -> SearchViewModel {
+        try SearchViewModel(client: mockClient())
     }
 }

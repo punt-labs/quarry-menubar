@@ -4,6 +4,20 @@ import XCTest
 // MARK: - QuarryModelTests
 
 final class QuarryModelTests: XCTestCase {
+
+    // MARK: Internal
+
+    func testModelsConformToSendable() {
+        assertSendable(makeHealthResponse())
+        assertSendable(makeSearchResponse())
+        assertSendable(makeDocumentsResponse())
+        assertSendable(makeCollectionsResponse())
+        assertSendable(makeStatusResponse())
+        assertSendable(makeDatabasesResponse())
+        assertSendable(makeShowPageResponse())
+        assertSendable(ErrorResponse(error: "boom"))
+    }
+
     func testHealthResponseDecoding() throws {
         let json = """
         {"status": "ok", "uptime_seconds": 42.5}
@@ -93,9 +107,11 @@ final class QuarryModelTests: XCTestCase {
             "document_count": 5,
             "collection_count": 2,
             "chunk_count": 100,
-            "database_path": "/home/user/.quarry/data/default/lancedb",
+            "registered_directories": 2,
+            "database_path": "/home/user/.punt-labs/quarry/data/default/lancedb",
             "database_size_bytes": 1048576,
             "embedding_model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+            "provider": "CPUExecutionProvider (fast)",
             "embedding_dimension": 768
         }
         """
@@ -104,8 +120,54 @@ final class QuarryModelTests: XCTestCase {
             from: XCTUnwrap(json.data(using: .utf8))
         )
         XCTAssertEqual(decoded.documentCount, 5)
+        XCTAssertEqual(decoded.registeredDirectories, 2)
         XCTAssertEqual(decoded.databaseSizeBytes, 1_048_576)
+        XCTAssertEqual(decoded.provider, "CPUExecutionProvider (fast)")
         XCTAssertEqual(decoded.embeddingDimension, 768)
+    }
+
+    func testDatabasesResponseDecoding() throws {
+        let json = """
+        {
+            "total_databases": 1,
+            "databases": [{
+                "name": "default",
+                "document_count": 3,
+                "size_bytes": 2048,
+                "size_description": "2.0 KB"
+            }]
+        }
+        """
+        let decoded = try JSONDecoder().decode(
+            DatabasesResponse.self,
+            from: XCTUnwrap(json.data(using: .utf8))
+        )
+        XCTAssertEqual(decoded.totalDatabases, 1)
+        XCTAssertEqual(decoded.databases, [
+            DatabaseSummary(
+                name: "default",
+                documentCount: 3,
+                sizeBytes: 2048,
+                sizeDescription: "2.0 KB"
+            )
+        ])
+    }
+
+    func testShowPageResponseDecoding() throws {
+        let json = """
+        {
+            "document_name": "report.pdf",
+            "page_number": 3,
+            "text": "Page text"
+        }
+        """
+        let decoded = try JSONDecoder().decode(
+            ShowPageResponse.self,
+            from: XCTUnwrap(json.data(using: .utf8))
+        )
+        XCTAssertEqual(decoded.documentName, "report.pdf")
+        XCTAssertEqual(decoded.pageNumber, 3)
+        XCTAssertEqual(decoded.text, "Page text")
     }
 
     func testSearchResultIdentifiable() throws {
@@ -127,70 +189,117 @@ final class QuarryModelTests: XCTestCase {
         )
         XCTAssertEqual(result.id, "test.pdf-1-2")
     }
+
+    // MARK: Private
+
+    private func assertSendable(_ value: some Sendable) {
+        _ = value
+    }
+
+    private func makeHealthResponse() -> HealthResponse {
+        HealthResponse(status: "ok", uptimeSeconds: 1.0)
+    }
+
+    private func makeSearchResponse() -> SearchResponse {
+        SearchResponse(
+            query: "hello",
+            totalResults: 1,
+            results: [
+                SearchResult(
+                    documentName: "README.md",
+                    collection: "default",
+                    pageNumber: 1,
+                    chunkIndex: 0,
+                    text: "Hello",
+                    pageType: "text",
+                    sourceFormat: ".md",
+                    agentHandle: nil,
+                    memoryType: nil,
+                    summary: nil,
+                    similarity: 0.9
+                )
+            ]
+        )
+    }
+
+    private func makeDocumentsResponse() -> DocumentsResponse {
+        DocumentsResponse(
+            totalDocuments: 1,
+            documents: [
+                DocumentInfo(
+                    documentName: "README.md",
+                    documentPath: "/tmp/README.md",
+                    collection: "default",
+                    totalPages: 1,
+                    chunkCount: 1,
+                    indexedPages: 1,
+                    ingestionTimestamp: "2026-01-01T00:00:00Z"
+                )
+            ]
+        )
+    }
+
+    private func makeCollectionsResponse() -> CollectionsResponse {
+        CollectionsResponse(
+            totalCollections: 1,
+            collections: [
+                CollectionInfo(
+                    collection: "default",
+                    documentCount: 1,
+                    chunkCount: 1
+                )
+            ]
+        )
+    }
+
+    private func makeStatusResponse() -> StatusResponse {
+        StatusResponse(
+            documentCount: 1,
+            collectionCount: 1,
+            chunkCount: 1,
+            registeredDirectories: 1,
+            databasePath: "/tmp/default/lancedb",
+            databaseSizeBytes: 1024,
+            embeddingModel: "Snowflake/snowflake-arctic-embed-m-v1.5",
+            provider: "CPUExecutionProvider (fast)",
+            embeddingDimension: 768
+        )
+    }
+
+    private func makeDatabasesResponse() -> DatabasesResponse {
+        DatabasesResponse(
+            totalDatabases: 1,
+            databases: [
+                DatabaseSummary(
+                    name: "default",
+                    documentCount: 1,
+                    sizeBytes: 1024,
+                    sizeDescription: "1.0 KB"
+                )
+            ]
+        )
+    }
+
+    private func makeShowPageResponse() -> ShowPageResponse {
+        ShowPageResponse(
+            documentName: "README.md",
+            pageNumber: 1,
+            text: "Hello"
+        )
+    }
 }
 
 // MARK: - QuarryClientNetworkTests
 
 final class QuarryClientNetworkTests: XCTestCase {
 
-    // MARK: Internal
-
-    override func setUp() {
-        super.setUp()
-        // Create a temp directory structure mimicking ~/.quarry/data/<db>/
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-        tempDir = dir
-        let dbDir = dir.appendingPathComponent("test-db")
-        try? FileManager.default.createDirectory(
-            at: dbDir,
-            withIntermediateDirectories: true
-        )
-        let portFile = dbDir.appendingPathComponent("serve.port")
-        try? "9999".write(to: portFile, atomically: true, encoding: .utf8)
-    }
-
     override func tearDown() {
-        if let tempDir {
-            try? FileManager.default.removeItem(at: tempDir)
-        }
         MockURLProtocol.requestHandler = nil
         super.tearDown()
     }
 
-    func testServerNotRunningThrows() async {
-        // Point at a non-existent database so the port file won't be found
-        let client = QuarryClient(databaseName: "nonexistent-\(UUID())", session: mockSession())
-        do {
-            _ = try await client.health()
-            XCTFail("Expected serverNotRunning error")
-        } catch let error as QuarryClientError {
-            if case .serverNotRunning = error {
-                // Expected
-            } else {
-                XCTFail("Expected serverNotRunning, got: \(error)")
-            }
-        } catch {
-            XCTFail("Unexpected error type: \(error)")
-        }
-    }
-
-    func testHTTPErrorParsesMessage() async {
-        // Write a port file to the real quarry path for "http-error-test"
-        let quarryDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".quarry")
-            .appendingPathComponent("data")
-            .appendingPathComponent("http-error-test-\(UUID())")
-        try? FileManager.default.createDirectory(
-            at: quarryDir,
-            withIntermediateDirectories: true
-        )
-        let portFile = quarryDir.appendingPathComponent("serve.port")
-        try? "9999".write(to: portFile, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: quarryDir) }
-
-        let dbName = quarryDir.lastPathComponent
-        let client = QuarryClient(databaseName: dbName, session: mockSession())
+    func testHTTPErrorParsesMessage() async throws {
+        let client = try mockClient()
 
         MockURLProtocol.requestHandler = { _ in
             jsonResponse(
@@ -215,25 +324,16 @@ final class QuarryClientNetworkTests: XCTestCase {
     }
 
     func testSearchRequestIncludesQueryParams() async throws {
-        let quarryDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".quarry")
-            .appendingPathComponent("data")
-            .appendingPathComponent("params-test-\(UUID())")
-        try FileManager.default.createDirectory(
-            at: quarryDir,
-            withIntermediateDirectories: true
-        )
-        let portFile = quarryDir.appendingPathComponent("serve.port")
-        try "9999".write(to: portFile, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: quarryDir) }
-
-        let dbName = quarryDir.lastPathComponent
-        let client = QuarryClient(databaseName: dbName, session: mockSession())
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8420"))
+        let client = try mockClient(profile: testProfile(baseURL: baseURL))
 
         var capturedURL: URL?
         MockURLProtocol.requestHandler = { request in
             capturedURL = request.url
-            return jsonResponse(#"{"query":"hello","total_results":0,"results":[]}"#)
+            return jsonResponse(
+                #"{"query":"hello","total_results":0,"results":[]}"#,
+                url: request.url ?? baseURL
+            )
         }
 
         _ = try await client.search(query: "hello", limit: 5, collection: "research")
@@ -247,8 +347,144 @@ final class QuarryClientNetworkTests: XCTestCase {
         XCTAssertEqual(queryDict["collection"], "research")
     }
 
-    // MARK: Private
+    func testSearchRequestIncludesAuthorizationHeader() async throws {
+        let baseURL = try XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420"))
+        let client = try mockClient(
+            profile: testProfile(
+                baseURL: baseURL,
+                mode: .remote,
+                origin: .proxyConfig,
+                authToken: "secret-token",
+                hostDisplayName: "okinos.user.home.lab"
+            )
+        )
 
-    private var tempDir: URL?
+        var capturedAuthorization: String?
+        MockURLProtocol.requestHandler = { request in
+            capturedAuthorization = request.value(forHTTPHeaderField: "Authorization")
+            return jsonResponse(
+                #"{"query":"hello","total_results":0,"results":[]}"#,
+                url: request.url ?? baseURL
+            )
+        }
+
+        _ = try await client.search(query: "hello")
+
+        XCTAssertEqual(capturedAuthorization, "Bearer secret-token")
+    }
+
+    func testUnauthorizedMapsToUnauthorizedError() async throws {
+        let client = try mockClient()
+        MockURLProtocol.requestHandler = { request in
+            let requestURL = try XCTUnwrap(request.url)
+            return jsonResponse(#"{"error":"Unauthorized"}"#, statusCode: 401, url: requestURL)
+        }
+
+        do {
+            _ = try await client.collections()
+            XCTFail("Expected unauthorized error")
+        } catch let error as QuarryClientError {
+            guard case .unauthorized = error else {
+                XCTFail("Expected unauthorized, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testNetworkURLErrorMapsToUnreachable() async throws {
+        let client = try mockClient()
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.cannotConnectToHost)
+        }
+
+        do {
+            _ = try await client.health()
+            XCTFail("Expected unreachable error")
+        } catch let error as QuarryClientError {
+            guard case .unreachable = error else {
+                XCTFail("Expected unreachable, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testTLSValidationFailuresAreConfigurationIssues() {
+        XCTAssertTrue(QuarryClientError.tlsValidationFailed("bad certificate").isConfigurationIssue)
+    }
+
+    func testCancelledTrustFailureMapsToTLSValidationError() {
+        let mapped = QuarryClient.mapURLError(
+            URLError(.cancelled),
+            trustFailureMessage: "Quarry certificate does not match host localhost.",
+            taskCancelled: false
+        )
+
+        guard case let QuarryClientError.tlsValidationFailed(message) = mapped else {
+            XCTFail("Expected tlsValidationFailed, got \(mapped)")
+            return
+        }
+        XCTAssertEqual(message, "Quarry certificate does not match host localhost.")
+    }
+
+    func testTaskCancellationStaysCancellationError() {
+        let mapped = QuarryClient.mapURLError(
+            URLError(.cancelled),
+            trustFailureMessage: nil,
+            taskCancelled: true
+        )
+
+        XCTAssertTrue(mapped is CancellationError)
+    }
+
+    func testSecureProfileWithoutCACertificateThrows() throws {
+        let baseURL = try XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420"))
+        let profile = testProfile(
+            baseURL: baseURL,
+            mode: .remote,
+            origin: .proxyConfig,
+            caCertificateURL: URL(fileURLWithPath: "/tmp/missing-ca.crt"),
+            hostDisplayName: "okinos.user.home.lab"
+        )
+
+        XCTAssertThrowsError(try QuarryClient(profile: profile)) { error in
+            guard case let QuarryClientError.missingCACertificate(path) = error else {
+                XCTFail("Expected missingCACertificate, got \(error)")
+                return
+            }
+            XCTAssertTrue(path.contains("missing-ca.crt"))
+        }
+    }
+
+    func testSecureProfileWithInvalidCACertificateThrows() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        defer {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+        }
+
+        let invalidCA = temporaryDirectory.appendingPathComponent("invalid-ca.crt")
+        try "not a certificate".write(to: invalidCA, atomically: true, encoding: .utf8)
+
+        let baseURL = try XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420"))
+        let profile = testProfile(
+            baseURL: baseURL,
+            mode: .remote,
+            origin: .proxyConfig,
+            caCertificateURL: invalidCA,
+            hostDisplayName: "okinos.user.home.lab"
+        )
+
+        XCTAssertThrowsError(try QuarryClient(profile: profile)) { error in
+            guard case let QuarryClientError.invalidCACertificate(path) = error else {
+                XCTFail("Expected invalidCACertificate, got \(error)")
+                return
+            }
+            XCTAssertTrue(path.contains("invalid-ca.crt"))
+        }
+    }
 
 }

@@ -2,37 +2,37 @@ import SwiftUI
 
 // MARK: - ErrorStateView
 
-/// Displays daemon errors with actionable guidance based on error type.
 struct ErrorStateView: View {
 
     // MARK: Internal
 
+    let title: String
     let message: String
-    let onRestart: () -> Void
+    let hint: String?
+    let retryLabel: String
+    let onRetry: () -> Void
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: errorIcon)
+            Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 28))
-                .foregroundStyle(errorColor)
+                .foregroundStyle(.red)
 
-            Text(errorTitle)
+            Text(title)
                 .font(.headline)
 
-            Text(errorDescription)
+            Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
 
-            if showRestart {
-                Button("Restart Backend") {
-                    onRestart()
-                }
-                .buttonStyle(.borderedProminent)
+            Button(retryLabel) {
+                onRetry()
             }
+            .buttonStyle(.borderedProminent)
 
-            if let hint = installHint {
+            if let hint {
                 Text(hint)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -49,86 +49,4 @@ struct ErrorStateView: View {
     // MARK: Private
 
     private static let emptyStateTopPadding: CGFloat = 40
-
-    private var errorCategory: ErrorCategory {
-        let lower = message.lowercased()
-        if lower.contains("not found") || lower.contains("no such file") {
-            return .notInstalled
-        } else if lower.contains("exited with code") {
-            return .crashed
-        } else {
-            return .unknown
-        }
-    }
-
-    private var errorIcon: String {
-        switch errorCategory {
-        case .notInstalled:
-            "exclamationmark.questionmark"
-        case .crashed:
-            "bolt.trianglebadge.exclamationmark"
-        case .unknown:
-            "exclamationmark.triangle"
-        }
-    }
-
-    private var errorColor: Color {
-        switch errorCategory {
-        case .notInstalled:
-            .orange
-        case .crashed,
-             .unknown:
-            .red
-        }
-    }
-
-    private var errorTitle: String {
-        switch errorCategory {
-        case .notInstalled:
-            "Quarry Not Found"
-        case .crashed:
-            "Backend Crashed"
-        case .unknown:
-            "Backend Error"
-        }
-    }
-
-    private var errorDescription: String {
-        switch errorCategory {
-        case .notInstalled:
-            "The quarry command was not found. Make sure quarry is installed and available in your PATH."
-        case .crashed:
-            message
-        case .unknown:
-            message
-        }
-    }
-
-    private var showRestart: Bool {
-        switch errorCategory {
-        case .notInstalled:
-            false
-        case .crashed,
-             .unknown:
-            true
-        }
-    }
-
-    private var installHint: String? {
-        switch errorCategory {
-        case .notInstalled:
-            "Install with: pip install quarry  or  uv pip install quarry"
-        case .crashed,
-             .unknown:
-            nil
-        }
-    }
-}
-
-// MARK: - ErrorCategory
-
-private enum ErrorCategory {
-    case notInstalled
-    case crashed
-    case unknown
 }

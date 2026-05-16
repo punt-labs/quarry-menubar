@@ -6,6 +6,8 @@ struct SearchPanel: View {
 
     @Bindable var viewModel: SearchViewModel
 
+    let allowsFinderReveal: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             searchField
@@ -13,7 +15,14 @@ struct SearchPanel: View {
             if let selected = viewModel.selectedResult {
                 detailHeader(for: selected)
                 Divider()
-                ResultDetail(result: selected, client: viewModel.client)
+                ResultDetail(
+                    result: selected,
+                    client: viewModel.client,
+                    allowsFinderReveal: allowsFinderReveal,
+                    onContentResolved: { content in
+                        detailTextForCopy = content.text
+                    }
+                )
             } else {
                 resultsList
                     .animation(.easeInOut(duration: 0.15), value: viewModel.state)
@@ -25,6 +34,21 @@ struct SearchPanel: View {
         .onAppear {
             isSearchFocused = true
         }
+        .onChange(of: Self.detailSelectionKey(for: viewModel.selectedResult)) { _, _ in
+            detailTextForCopy = nil
+        }
+    }
+
+    static func detailTextToCopy(
+        resolvedDetailText: String?,
+        fallbackText: String
+    ) -> String {
+        resolvedDetailText ?? fallbackText
+    }
+
+    static func detailSelectionKey(for result: SearchResult?) -> String? {
+        guard let result else { return nil }
+        return "\(result.collection)/\(result.documentName)-\(result.pageNumber)-\(result.chunkIndex)"
     }
 
     // MARK: Private
@@ -37,6 +61,7 @@ struct SearchPanel: View {
     private static let scrollAnchorUp = UnitPoint(x: 0.5, y: 0.15)
 
     @State private var scrollAnchor: UnitPoint = .top
+    @State private var detailTextForCopy: String?
     @FocusState private var isSearchFocused: Bool
 
     private var collectionPicker: some View {
@@ -207,7 +232,13 @@ struct SearchPanel: View {
             Spacer()
             Button {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(result.text, forType: .string)
+                NSPasteboard.general.setString(
+                    Self.detailTextToCopy(
+                        resolvedDetailText: detailTextForCopy,
+                        fallbackText: result.text
+                    ),
+                    forType: .string
+                )
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
                     .font(.subheadline)
