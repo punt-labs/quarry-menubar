@@ -70,14 +70,57 @@ final class QuarryClient {
         if let session {
             self.session = session
             sessionDelegate = nil
+            ownsSession = false
         } else {
             let (builtSession, delegate) = try Self.makeSession(for: profile)
             self.session = builtSession
             sessionDelegate = delegate
+            ownsSession = true
+        }
+    }
+
+    deinit {
+        if ownsSession {
+            session.invalidateAndCancel()
         }
     }
 
     // MARK: Internal
+
+    static func mapURLError(
+        _ error: URLError,
+        trustFailureMessage: String?,
+        taskCancelled: Bool
+    ) -> Error {
+        if let trustFailureMessage {
+            return QuarryClientError.tlsValidationFailed(trustFailureMessage)
+        }
+
+        switch error.code {
+        case .cannotFindHost,
+             .cannotConnectToHost,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .timedOut,
+             .dnsLookupFailed:
+            return QuarryClientError.unreachable(error.localizedDescription)
+        case .cancelled:
+            return taskCancelled
+                ? CancellationError()
+                : QuarryClientError.networkError(error.localizedDescription)
+        case .userCancelledAuthentication,
+             .secureConnectionFailed,
+             .serverCertificateHasBadDate,
+             .serverCertificateUntrusted,
+             .serverCertificateHasUnknownRoot,
+             .clientCertificateRejected,
+             .clientCertificateRequired,
+             .appTransportSecurityRequiresSecureConnection:
+            return QuarryClientError.tlsValidationFailed(error.localizedDescription)
+        default:
+            return QuarryClientError.networkError(error.localizedDescription)
+        }
+    }
 
     // MARK: - Public API
 
@@ -137,6 +180,7 @@ final class QuarryClient {
     private let session: URLSession
     private let sessionDelegate: PinnedCASessionDelegate?
     private let profile: ConnectionProfile
+    private let ownsSession: Bool
 
     private static func makeSession(
         for profile: ConnectionProfile
@@ -202,6 +246,8 @@ final class QuarryClient {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
+        sessionDelegate?.clearLastTrustFailureMessage()
+
         let data: Data
         let response: URLResponse
         do {
@@ -247,25 +293,11 @@ final class QuarryClient {
         return profile.baseURL
     }
 
-    private func mapURLError(_ error: URLError) -> QuarryClientError {
-        switch error.code {
-        case .cannotFindHost,
-             .cannotConnectToHost,
-             .networkConnectionLost,
-             .notConnectedToInternet,
-             .timedOut,
-             .dnsLookupFailed:
-            return .unreachable(error.localizedDescription)
-        case .secureConnectionFailed,
-             .serverCertificateHasBadDate,
-             .serverCertificateUntrusted,
-             .serverCertificateHasUnknownRoot,
-             .clientCertificateRejected,
-             .clientCertificateRequired,
-             .appTransportSecurityRequiresSecureConnection:
-            return .tlsValidationFailed(error.localizedDescription)
-        default:
-            return .networkError(error.localizedDescription)
-        }
+    private func mapURLError(_ error: URLError) -> Error {
+        Self.mapURLError(
+            error,
+            trustFailureMessage: sessionDelegate?.consumeLastTrustFailureMessage(),
+            taskCancelled: Task.isCancelled
+        )
     }
 }

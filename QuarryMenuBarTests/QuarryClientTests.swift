@@ -412,6 +412,30 @@ final class QuarryClientNetworkTests: XCTestCase {
         XCTAssertTrue(QuarryClientError.tlsValidationFailed("bad certificate").isConfigurationIssue)
     }
 
+    func testCancelledTrustFailureMapsToTLSValidationError() {
+        let mapped = QuarryClient.mapURLError(
+            URLError(.cancelled),
+            trustFailureMessage: "Quarry certificate does not match host localhost.",
+            taskCancelled: false
+        )
+
+        guard case let QuarryClientError.tlsValidationFailed(message) = mapped else {
+            XCTFail("Expected tlsValidationFailed, got \(mapped)")
+            return
+        }
+        XCTAssertEqual(message, "Quarry certificate does not match host localhost.")
+    }
+
+    func testTaskCancellationStaysCancellationError() {
+        let mapped = QuarryClient.mapURLError(
+            URLError(.cancelled),
+            trustFailureMessage: nil,
+            taskCancelled: true
+        )
+
+        XCTAssertTrue(mapped is CancellationError)
+    }
+
     func testSecureProfileWithoutCACertificateThrows() throws {
         let baseURL = try XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420"))
         let profile = testProfile(

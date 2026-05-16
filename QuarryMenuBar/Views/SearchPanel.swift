@@ -34,7 +34,7 @@ struct SearchPanel: View {
         .onAppear {
             isSearchFocused = true
         }
-        .onChange(of: viewModel.selectedResult?.id) { _, _ in
+        .onChange(of: Self.detailSelectionKey(for: viewModel.selectedResult)) { _, _ in
             detailTextForCopy = nil
         }
     }
@@ -44,6 +44,11 @@ struct SearchPanel: View {
         fallbackText: String
     ) -> String {
         resolvedDetailText ?? fallbackText
+    }
+
+    static func detailSelectionKey(for result: SearchResult?) -> String? {
+        guard let result else { return nil }
+        return "\(result.collection)/\(result.documentName)-\(result.pageNumber)-\(result.chunkIndex)"
     }
 
     // MARK: Private

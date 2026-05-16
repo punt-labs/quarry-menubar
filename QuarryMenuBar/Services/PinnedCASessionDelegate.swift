@@ -11,6 +11,11 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
 
     // MARK: Internal
 
+    static func allowsServerAuthentication(extendedKeyUsageValue: Any?) -> Bool {
+        guard let extendedKeyUsageValue else { return true }
+        return containsServerAuthentication(in: extendedKeyUsageValue) ?? true
+    }
+
     func urlSession(
         _: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
@@ -28,6 +33,21 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         handle(challenge: challenge, completionHandler: completionHandler)
     }
 
+    func consumeLastTrustFailureMessage() -> String? {
+        trustFailureLock.lock()
+        defer {
+            lastTrustFailureMessage = nil
+            trustFailureLock.unlock()
+        }
+        return lastTrustFailureMessage
+    }
+
+    func clearLastTrustFailureMessage() {
+        trustFailureLock.lock()
+        lastTrustFailureMessage = nil
+        trustFailureLock.unlock()
+    }
+
     // MARK: Private
 
     private enum CertificateError: Error {
@@ -37,6 +57,8 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
     private static let serverAuthenticationOID = Data([0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01])
 
     private let certificate: SecCertificate
+    private let trustFailureLock = NSLock()
+    private var lastTrustFailureMessage: String?
 
     private static func makeCertificate(from certificateData: Data) throws -> SecCertificate {
         if let certificate = SecCertificateCreateWithData(nil, certificateData as CFData) {
@@ -74,10 +96,44 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         return Data(base64Encoded: base64Lines.joined())
     }
 
+    private static func containsServerAuthentication(in value: Any) -> Bool? {
+        switch value {
+        case let data as Data:
+            return data == serverAuthenticationOID
+        case let string as String:
+            let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return normalized == "1.3.6.1.5.5.7.3.1"
+                || normalized == "tls web server authentication"
+                || normalized == "serverauth"
+        case let dictionary as [CFString: Any]:
+            guard let nestedValue = dictionary[kSecPropertyKeyValue] else { return nil }
+            return containsServerAuthentication(in: nestedValue)
+        case let dictionary as [String: Any]:
+            guard let nestedValue = dictionary[kSecPropertyKeyValue as String] ?? dictionary["value"] else {
+                return nil
+            }
+            return containsServerAuthentication(in: nestedValue)
+        case let values as [Any]:
+            var sawParsedValue = false
+            for entry in values {
+                guard let matches = containsServerAuthentication(in: entry) else { continue }
+                sawParsedValue = true
+                if matches {
+                    return true
+                }
+            }
+            return sawParsedValue ? false : nil
+        default:
+            return nil
+        }
+    }
+
     private func handle(
         challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
+        clearLastTrustFailureMessage()
+
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
               let serverTrust = challenge.protectionSpace.serverTrust
         else {
@@ -86,6 +142,7 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         }
 
         guard let leafCertificate = leafCertificate(from: serverTrust) else {
+            recordTrustFailure("Missing Quarry server certificate.")
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
         }
@@ -97,10 +154,22 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         SecTrustSetPolicies(serverTrust, SecPolicyCreateBasicX509())
 
         var error: CFError?
-        guard SecTrustEvaluateWithError(serverTrust, &error),
-              hostMatchesCertificate(challenge.protectionSpace.host, certificate: leafCertificate),
-              allowsServerAuthentication(for: leafCertificate)
-        else {
+        guard SecTrustEvaluateWithError(serverTrust, &error) else {
+            recordTrustFailure(error?.localizedDescription ?? "Pinned Quarry CA validation failed.")
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        guard hostMatchesCertificate(challenge.protectionSpace.host, certificate: leafCertificate) else {
+            recordTrustFailure(
+                "Quarry certificate does not match host \(challenge.protectionSpace.host)."
+            )
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        guard allowsServerAuthentication(for: leafCertificate) else {
+            recordTrustFailure("Quarry certificate is not valid for TLS server authentication.")
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
         }
@@ -172,18 +241,22 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         ) as? [CFString: Any],
             let extendedUsageDictionary = values[kSecOIDExtendedKeyUsage] as? [CFString: Any]
         else {
-            return false
+            return true
         }
 
-        guard let extendedUsages = extendedUsageDictionary[kSecPropertyKeyValue] as? [Data] else {
-            return false
-        }
-
-        return extendedUsages.contains(Self.serverAuthenticationOID)
+        return Self.allowsServerAuthentication(
+            extendedKeyUsageValue: extendedUsageDictionary[kSecPropertyKeyValue]
+        )
     }
 
     private func leafCertificate(from serverTrust: SecTrust) -> SecCertificate? {
         (SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate])?.first
+    }
+
+    private func recordTrustFailure(_ message: String) {
+        trustFailureLock.lock()
+        lastTrustFailureMessage = message
+        trustFailureLock.unlock()
     }
 
     private func matches(
