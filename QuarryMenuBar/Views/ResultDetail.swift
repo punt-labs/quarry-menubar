@@ -85,7 +85,13 @@ struct ResultDetail: View {
                 page: result.pageNumber,
                 collection: result.collection
             )
-            return ResultDetailContent(text: response.text, warningMessage: nil)
+            return ResultDetailContent(
+                text: ExtractedTextFormatter.formatDetailText(
+                    response.text,
+                    sourceFormat: result.sourceFormat
+                ),
+                warningMessage: nil
+            )
         } catch {
             return ResultDetailContent(
                 text: result.text,

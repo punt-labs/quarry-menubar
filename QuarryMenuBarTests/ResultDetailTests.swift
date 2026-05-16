@@ -40,6 +40,43 @@ final class ResultDetailTests: XCTestCase {
         XCTAssertNil(content.warningMessage)
     }
 
+    func testLoadContentReflowsWrappedPDFPageText() async throws {
+        let result = makeResult(sourceFormat: ".pdf")
+        let client = try mockClient()
+
+        MockURLProtocol.requestHandler = { request in
+            let requestURL = try XCTUnwrap(request.url)
+            switch requestURL.path {
+            case "/show":
+                return jsonResponse(
+                    """
+                    {
+                        "document_name": "README.md",
+                        "page_number": 3,
+                        "text": "Chapter 3 / An Introduction to Relational Databases\\n75\\ncould be relational, while a given user could have an external view that was\\nhierarchic. In\\npractice, however, most systems use the same type of structure as the basis for\\nboth levels,\\nand relational products are no exception to this general rule---views are still\\nrelvars, just\\nlike the base relvars are. And since the same type of object is supported at both\\nlevels, the"
+                    }
+                    """,
+                    url: requestURL
+                )
+            default:
+                XCTFail("Unexpected request: \(requestURL.absoluteString)")
+                return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
+            }
+        }
+
+        let content = await ResultDetail.loadContent(result: result, client: client)
+
+        XCTAssertEqual(
+            content.text,
+            """
+            Chapter 3 / An Introduction to Relational Databases
+            75
+            could be relational, while a given user could have an external view that was hierarchic. In practice, however, most systems use the same type of structure as the basis for both levels, and relational products are no exception to this general rule---views are still relvars, just like the base relvars are. And since the same type of object is supported at both levels, the
+            """
+        )
+        XCTAssertNil(content.warningMessage)
+    }
+
     func testLoadContentSurfacesFallbackWarningWhenShowFails() async throws {
         let result = makeResult()
         let client = try mockClient()
@@ -64,9 +101,34 @@ final class ResultDetailTests: XCTestCase {
         )
     }
 
+    func testFormatDetailTextLeavesNonPDFTextUnchanged() {
+        let text = """
+        Heading
+        wrapped prose
+        stays as-authored
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(text, sourceFormat: ".md"),
+            text
+        )
+    }
+
+    func testFormatDetailTextUnhyphenatesSoftWrappedPDFWords() {
+        let text = """
+        This becomes inas-
+        much easier to read.
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(text, sourceFormat: ".pdf"),
+            "This becomes inasmuch easier to read."
+        )
+    }
+
     // MARK: Private
 
-    private func makeResult() -> SearchResult {
+    private func makeResult(sourceFormat: String = ".md") -> SearchResult {
         SearchResult(
             documentName: "README.md",
             collection: "quarry-menubar",
@@ -74,7 +136,7 @@ final class ResultDetailTests: XCTestCase {
             chunkIndex: 0,
             text: "Search snippet",
             pageType: "text",
-            sourceFormat: ".md",
+            sourceFormat: sourceFormat,
             agentHandle: nil,
             memoryType: nil,
             summary: nil,
