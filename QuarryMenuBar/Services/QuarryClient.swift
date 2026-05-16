@@ -161,7 +161,12 @@ final class QuarryClient {
             throw QuarryClientError.invalidCACertificate(caURL.path)
         }
 
-        let delegate = PinnedCASessionDelegate(certificateData: certificateData)
+        let delegate: PinnedCASessionDelegate
+        do {
+            delegate = try PinnedCASessionDelegate(certificateData: certificateData)
+        } catch {
+            throw QuarryClientError.invalidCACertificate(caURL.path)
+        }
         let session = URLSession(
             configuration: configuration,
             delegate: delegate,
