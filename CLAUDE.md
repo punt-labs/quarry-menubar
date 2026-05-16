@@ -174,6 +174,20 @@ Key SwiftFormat settings:
 - File length: 750 warning, 1000 error
 - Cyclomatic complexity: 15 warning, 25 error
 
+### Review Tools vs Standards
+
+Copilot, Bugbot, local review agents, and other automated reviewers are advisory. Repo rules in this file, parent-workspace guidance, and the project's Swift/macOS standards win when they conflict with a review suggestion.
+
+Treat review feedback seriously, but do not cargo-cult it. If you decline a suggestion, document the exact reason with a code reference.
+
+### Verify Outputs, Not Just Gates
+
+Passing `make format`, `make lint`, and `make test` is necessary, not sufficient. After changing behavior:
+
+- Open the touched files and read the resulting code.
+- Launch the app or exercise the changed path against a real Quarry connection.
+- Compare the actual behavior with the intended behavior before declaring the work complete.
+
 ## Development Workflow
 
 ### Issue Tracking with Beads
@@ -187,7 +201,7 @@ bd create --title="Add feature" --type=task --priority=2  # Create issue
 bd update <id> --status=in_progress          # Claim work
 bd close <id>                                # Mark complete
 bd dep add <child> <parent>                  # Set dependency
-bd sync                                      # Sync with git remote
+bd vc status                                 # Inspect beads database VC state
 ```
 
 | Use Beads (`bd`) | Use TodoWrite |
@@ -245,6 +259,18 @@ Match the workflow to the task's scope. The deciding factor is **design ambiguit
 
 **Ralph-loop** is a tool *within* tiers, not a tier itself. Use it in any tier when a sub-task has clear, testable success criteria and may need iteration.
 
+### Session Queue
+
+When you claim a batch of beads for one session, mirror the active subset in a session-local plan or task list. Beads are the durable cross-session source of truth; the session plan is the live queue you monitor while executing.
+
+Workflow:
+
+1. Pick a realistic batch from `bd ready`.
+2. Claim or mark the selected beads in progress.
+3. Create one session-local task per bead using the available planning tool.
+4. Close the bead and mark the session task complete together.
+5. Leave unfinished work as open beads; no extra carry-forward bookkeeping is needed.
+
 ### Branch Discipline
 
 All code changes go on feature branches. Never commit directly to main.
@@ -275,6 +301,22 @@ Format: `type(scope): description`
 | `docs:` | Documentation |
 | `chore:` | Build, dependencies, CI |
 
+### PR Boundaries
+
+Split work by **rollback granularity**, not by diff size. Ask: if this broke in production, what would need to be reverted together? That is one PR.
+
+Valid reasons to split:
+
+- Independent rollback paths
+- Sequential dependency where one change must land before another
+- Clear product or operational boundary
+
+Invalid reasons to split:
+
+- "The diff is large"
+- "This feels cleaner as a separate concern"
+- "Reviewers can look at smaller chunks later"
+
 ### GitHub Operations
 
 Use the GitHub MCP server tools for all GitHub operations (creating PRs, merging, reading PR comments, issues). Git operations (commit, push, branch) use the Bash tool.
@@ -296,12 +338,42 @@ Three documents track different aspects of the project. Each has a clear trigger
 - [ ] **PR/FAQ updated** if product direction or risk assumptions shifted
 - [ ] **Quality gates pass**: `make format && make lint && make test`
 - [ ] **Live demo** for features: launch against a real Quarry connection and exercise the feature end-to-end
+- [ ] **Local review agents run on the full diff** and their findings are resolved
+- [ ] **Human IDE review** completed on the full diff
+
+### Development Loop
+
+Two nested loops govern all non-trivial changes.
+
+#### Inner loop — one coherent change
+
+Run this loop after each sizeable implementation step or delegated mission:
+
+1. Implement the change or delegate it to the right specialist.
+2. Run the relevant local checks. For production code changes, that means the full gate: `make format && make lint && make test`.
+3. Exercise the changed behavior manually against a real Quarry connection when the change affects runtime behavior.
+4. Run local review agents on the mission diff. Minimum: one general code-review pass and one silent-failure / edge-case pass.
+5. Fix every finding. To dismiss one, record the exact finding, the reason it does not apply, and the code reference.
+6. Re-run local reviewers until the first clean round.
+7. Commit.
+
+#### Outer loop — one PR
+
+After all coherent changes for the branch are committed:
+
+1. Run the full quality gates on the accumulated diff.
+2. Run both local review agents on the complete diff.
+3. Perform a human IDE review of the full diff.
+4. Run the complete user-facing flow end-to-end against a real Quarry connection.
+5. Open the PR only after the local review loop is clean.
+
+A PR opened before the outer loop is clean is a process failure, not a "draft for later cleanup."
 
 ### Code Review Flow
 
 Do **not** merge immediately after creating a PR. Expect **2–6 review cycles** before merging.
 
-1. **Create PR** — push branch, open PR via `mcp__github__create_pull_request`. Prefer MCP GitHub tools over `gh` CLI.
+1. **Create PR** — after the outer loop above is clean, push branch and open the PR via `mcp__github__create_pull_request`. Prefer MCP GitHub tools over `gh` CLI.
 2. **Request Copilot review** — use `mcp__github__request_copilot_review`.
 3. **Watch for feedback in the background** — `gh pr checks <number> --watch` in a background task or separate session. Do not stop waiting. Copilot and Bugbot may take 1–3 minutes after CI completes.
 4. **Read all feedback** via MCP: `mcp__github__pull_request_read` with `get_reviews` and `get_review_comments`.
@@ -316,7 +388,9 @@ Do **not** merge immediately after creating a PR. Expect **2–6 review cycles**
 git status                  # Check for uncommitted work
 git add <files>             # Stage changes
 git commit -m "..."         # Commit with quality gates passing
-bd sync                     # Sync beads with git
+git push -u origin <branch> # First push on a new branch
+# OR
+git pull --rebase           # If the branch already tracks a remote
 git push                    # Push to remote
 git status                  # Must show "up to date with origin"
 ```
