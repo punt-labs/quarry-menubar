@@ -6,6 +6,8 @@ struct SearchPanel: View {
 
     @Bindable var viewModel: SearchViewModel
 
+    let allowsFinderReveal: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             searchField
@@ -13,7 +15,11 @@ struct SearchPanel: View {
             if let selected = viewModel.selectedResult {
                 detailHeader(for: selected)
                 Divider()
-                ResultDetail(result: selected, client: viewModel.client)
+                ResultDetail(
+                    result: selected,
+                    client: viewModel.client,
+                    allowsFinderReveal: allowsFinderReveal
+                )
             } else {
                 resultsList
                     .animation(.easeInOut(duration: 0.15), value: viewModel.state)

@@ -24,6 +24,7 @@ excluded:
   - DerivedData
   - .build
   - build
+  - .tmp
   - "*/DerivedSources/*"
   - "**/*.generated.swift"
 

@@ -11,7 +11,7 @@
 
 The app functions but has significant readability issues in light mode, layout instability during state transitions, and interaction patterns that diverge from the macOS conventions users expect. The core UX benchmark is **Spotlight** — users already have muscle memory for "type to search, see results, drill into detail." Where Quarry departs from this model without reason, it creates friction.
 
-This audit covers seven areas: color/readability, layout stability, search interaction, results presentation, detail view, database picker reliability, and identity/iconography.
+This audit covers seven areas: color/readability, layout stability, search interaction, results presentation, detail view, connection-state clarity, and identity/iconography.
 
 ---
 
@@ -247,52 +247,33 @@ As an alternative or complement to widening, wrap code text in a `ScrollView(.ho
 
 ---
 
-## 6. Database Picker — Race Condition
+## 6. Connection State — Historical Note and Current Guidance
 
-### Problem
+### Historical Problem
 
-The database dropdown can show "Loading..." indefinitely, requiring a manual refresh. The user reports this as a race condition.
+The older app version owned Quarry process lifecycle and loaded databases in-app. That led to a race where the database dropdown could show "Loading..." indefinitely, requiring a manual refresh.
 
-### Root Cause Analysis
+### Why It Changed
 
-The `.task` modifier on `DatabasePickerView` fires `loadDatabases()` on every view appearance. Several scenarios can leave it stuck:
+The app now follows Quarry's connection model instead:
 
-1. **Concurrent calls**: `loadDatabases()` has no reentrancy guard. If the view reappears (e.g., state transition from `.starting` to `.running` recreates the view tree), a second call races with the first. Both set `isDiscovering = true`, but if the first call's result is discarded or errors silently, `isDiscovering` may never reset to `false`.
+1. **Connection source of truth**: local fallback or remote `quarry.toml`, not a subprocess owned by the app.
+2. **Read-only database display**: the server's `/databases` response describes the active database; the menu bar app does not switch databases itself.
+3. **Capability gating**: local-only actions like Finder reveal must be hidden in remote mode because server filesystem paths are not usable on the Mac.
 
-2. **Task cancellation**: When SwiftUI cancels a `.task` (e.g., view disappears), any `await` call inside it throws `CancellationError`. If `loadDatabases()` doesn't handle cancellation and `isDiscovering` is already `true`, it stays `true` forever.
+### Current Recommendations
 
-3. **Subprocess timeout**: `CLIDatabaseDiscovery.discoverDatabases()` runs `quarry databases --json` as a subprocess. If the subprocess hangs (e.g., quarry isn't responding), there's no timeout — the Task waits indefinitely while showing "Loading...".
+**R6.1 — Show connection provenance clearly.**
+Present a read-only badge for `Local` or `Remote: <host>` and a separate badge for the active database name reported by Quarry.
 
-### Recommendations
+**R6.2 — Separate unavailable vs misconfigured.**
+Users need different guidance for "server unreachable" and "config is malformed / CA missing / auth invalid." Treat them as different UI states.
 
-**R6.1 — Add a reentrancy guard.**
+**R6.3 — Gate local filesystem affordances.**
+In remote mode, hide Finder reveal and any future "open local path" actions entirely.
 
-```swift
-func loadDatabases() async {
-    guard !isDiscovering else { return }
-    isDiscovering = true
-    defer { isDiscovering = false }
-    // ... discovery logic
-}
-```
-
-The `defer` ensures `isDiscovering` resets even on cancellation or error.
-
-**R6.2 — Add a subprocess timeout.**
-Wrap the discovery call in a `Task` with a timeout:
-
-```swift
-try await withThrowingTaskGroup(of: [DatabaseInfo].self) { group in
-    group.addTask { try await self.discovery.discoverDatabases() }
-    group.addTask { try await Task.sleep(for: .seconds(5)); throw TimeoutError() }
-    let result = try await group.next()!
-    group.cancelAll()
-    return result
-}
-```
-
-**R6.3 — Show a timeout message.**
-If discovery takes longer than 5 seconds, replace "Loading..." with "Discovery timed out" and show the Refresh button more prominently.
+**R6.4 — Keep retry cheap and explicit.**
+Refreshing connection state should re-run the same connection resolution and health/status checks, without side effects like starting or stopping Quarry.
 
 ---
 

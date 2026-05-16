@@ -1,12 +1,22 @@
 import HighlightSwift
 import SwiftUI
 
+// MARK: - ResultDetailContent
+
+struct ResultDetailContent: Equatable {
+    let text: String
+    let warningMessage: String?
+}
+
+// MARK: - ResultDetail
+
 struct ResultDetail: View {
 
     // MARK: Internal
 
     let result: SearchResult
     let client: QuarryClient
+    let allowsFinderReveal: Bool
 
     var body: some View {
         let isCode = SyntaxHighlighter.isCodeFormat(result.sourceFormat)
@@ -15,6 +25,11 @@ struct ResultDetail: View {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 Divider()
+                if let detailWarningMessage {
+                    Label(detailWarningMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 if let output = highlightOutput {
                     if isCode {
                         ScrollView(.horizontal, showsIndicators: true) {
@@ -41,22 +56,46 @@ struct ResultDetail: View {
         }
         .task(id: taskID) {
             highlightOutput = nil
+            detailWarningMessage = nil
+            let detailContent = await Self.loadContent(result: result, client: client)
+            guard !Task.isCancelled else { return }
             let fontSize: CGFloat = isCode ? 11 : 13
             let newOutput = await SyntaxHighlighter.highlight(
-                result.text,
+                detailContent.text,
                 format: result.sourceFormat,
                 fontSize: fontSize,
                 theme: resolvedTheme,
                 lightMode: colorScheme == .light
             )
             guard !Task.isCancelled else { return }
+            detailWarningMessage = detailContent.warningMessage
             highlightOutput = newOutput
+        }
+    }
+
+    static func loadContent(
+        result: SearchResult,
+        client: QuarryClient
+    ) async -> ResultDetailContent {
+        do {
+            let response = try await client.show(
+                document: result.documentName,
+                page: result.pageNumber,
+                collection: result.collection
+            )
+            return ResultDetailContent(text: response.text, warningMessage: nil)
+        } catch {
+            return ResultDetailContent(
+                text: result.text,
+                warningMessage: fallbackMessage(for: error)
+            )
         }
     }
 
     // MARK: Private
 
     @State private var highlightOutput: SyntaxHighlighter.Output?
+    @State private var detailWarningMessage: String?
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("syntaxTheme") private var themeName: String = "xcode"
 
@@ -79,29 +118,46 @@ struct ResultDetail: View {
                     .font(.caption)
                 Label(result.collection, systemImage: "folder")
                     .font(.caption)
-                    .onTapGesture {
+                if allowsFinderReveal {
+                    Button {
                         Task { await revealInFinder() }
+                    } label: {
+                        Label("Reveal in Finder", systemImage: "folder.badge.gearshape")
+                            .font(.caption)
                     }
+                    .buttonStyle(.plain)
                     .help("Reveal source file in Finder")
+                }
             }
             .foregroundStyle(.secondary)
         }
     }
 
+    private static func fallbackMessage(for error: Error) -> String {
+        if let clientError = error as? QuarryClientError,
+           let description = clientError.errorDescription {
+            return "\(description) Showing the search excerpt instead."
+        }
+        return "Could not load the full page from Quarry. Showing the search excerpt instead."
+    }
+
     private func revealInFinder() async {
+        guard allowsFinderReveal else { return }
         do {
             let docs = try await client.documents(collection: result.collection)
             if let info = docs.documents.first(where: { $0.documentName == result.documentName }) {
+                guard FileManager.default.fileExists(atPath: info.documentPath) else {
+                    openFallbackDataDirectory()
+                    return
+                }
                 let url = URL(fileURLWithPath: info.documentPath)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 activateFinder()
+                return
             }
+            openFallbackDataDirectory()
         } catch {
-            // Fall back to opening the quarry data directory
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            let dataDir = home.appendingPathComponent(".quarry").appendingPathComponent("data")
-            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dataDir.path)
-            activateFinder()
+            openFallbackDataDirectory()
         }
     }
 
@@ -113,5 +169,15 @@ struct ResultDetail: View {
         NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
             .first?
             .activate()
+    }
+
+    private func openFallbackDataDirectory() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let dataDir = home
+            .appendingPathComponent(".punt-labs")
+            .appendingPathComponent("quarry")
+            .appendingPathComponent("data")
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dataDir.path)
+        activateFinder()
     }
 }

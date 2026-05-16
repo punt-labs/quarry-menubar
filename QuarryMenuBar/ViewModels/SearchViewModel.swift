@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import os
 
 // MARK: - SearchState
@@ -37,7 +38,7 @@ final class SearchViewModel {
 
     // MARK: Lifecycle
 
-    init(client: QuarryClient = QuarryClient()) {
+    init(client: QuarryClient) {
         self.client = client
     }
 
@@ -91,8 +92,10 @@ final class SearchViewModel {
             return
         }
 
+        debounceTask?.cancel()
         searchTask?.cancel()
-        searchTask = Task {
+        searchTask = Task { [weak self] in
+            guard let self else { return }
             state = .loading
             do {
                 let response = try await client.search(query: trimmed, collection: selectedCollection)
@@ -173,9 +176,9 @@ final class SearchViewModel {
             return
         }
 
-        debounceTask = Task {
+        debounceTask = Task { [weak self] in
             try? await Task.sleep(for: Self.debounceInterval)
-            guard !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled else { return }
             search()
         }
     }

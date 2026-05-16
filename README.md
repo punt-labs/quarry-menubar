@@ -9,24 +9,34 @@ macOS menu bar app for [Quarry](https://github.com/punt-labs/quarry) document se
 
 ## What It Does
 
-Quarry Menu Bar sits in your menu bar and gives you instant access to your Quarry knowledge base. Click the icon (or press the hotkey) to search across all your indexed documents without switching apps.
+Quarry Menu Bar sits in your menu bar and gives you instant access to your Quarry knowledge base. Click the icon to search across all your indexed documents without switching apps.
 
 - **Semantic search** across all indexed documents
-- **Database switching** between named databases
+- **Connection-aware UI** for local or remote Quarry
 - **Syntax-highlighted results** for code, Markdown, and prose
 - **Detail view** with full page context for each result
 
-The app manages its own `quarry serve` process — no manual server setup needed.
+The app does **not** manage Quarry itself. It follows Quarry's current connection model:
+
+- Use the remote profile in `~/.punt-labs/mcp-proxy/quarry.toml` when present
+- Otherwise connect to local Quarry at `https://localhost:8420` with the pinned CA in `~/.punt-labs/quarry/tls/ca.crt`
 
 ## Requirements
 
 - macOS 14 (Sonoma) or later
-- [quarry-mcp](https://github.com/punt-labs/quarry) installed with at least one indexed database
+- [quarry](https://github.com/punt-labs/quarry) installed and configured
 
 ```bash
 pip install quarry-mcp
 quarry install
 quarry ingest ~/Documents/my-notes.md
+```
+
+For remote Quarry:
+
+```bash
+quarry login <host> --api-key <token>
+# or set QUARRY_API_KEY before running: quarry login <host>
 ```
 
 ## Development
@@ -60,7 +70,7 @@ make format && make lint && make test
 QuarryMenuBar/
   App/                  # App entry point, lifecycle
   Models/               # Codable JSON models for API responses
-  Services/             # DaemonManager, DatabaseManager, QuarryClient, HotkeyManager
+  Services/             # ConnectionManager, ConnectionProfileLoader, QuarryClient, HotkeyManager
   Utilities/            # SyntaxHighlighter
   ViewModels/           # SearchViewModel (debounced search)
   Views/                # SwiftUI views (ContentPanel, SearchPanel, ResultDetail, ...)
@@ -73,23 +83,26 @@ The Xcode project is generated from `project.yml` and gitignored. New `.swift` f
 
 ## Architecture
 
-The app spawns `quarry serve --db <name>` as a subprocess and communicates over localhost HTTP. Port discovery works through a file at `~/.quarry/data/<db>/serve.port`.
+The app is a Quarry client. It resolves the active connection, talks to Quarry over HTTP(S), and adapts the UI to local vs remote capabilities.
 
 ```text
 QuarryMenuBarApp
-  -> DaemonManager (spawns quarry serve, monitors health)
-  -> DatabaseManager (discovers databases via quarry databases --json)
+  -> ConnectionProfileLoader (reads quarry.toml or falls back to local TLS)
+  -> ConnectionManager (resolves profile, probes health/status/databases)
+  -> QuarryClient (HTTP(S) + Bearer auth + pinned CA)
   -> SearchViewModel (debounced search via QuarryClient)
-  -> ContentPanel (routes UI by daemon state)
+  -> ContentPanel (routes UI by connection state)
 ```
 
-No third-party dependencies. Pure SwiftUI with `@Observable` (Swift 5.9+).
+Dependencies:
+
+- `HighlightSwift` for syntax highlighting themes
+- Pure SwiftUI + `@Observable` for app state and UI composition
 
 ## Roadmap
 
 - [ ] Register folders for sync directly from menu bar
 - [ ] Trigger sync from menu bar
-- [ ] Collection filtering in search
 - [ ] Ingest files via drag-and-drop
 - [ ] Global keyboard shortcut configuration
 - [ ] Status indicator for sync/ingest progress

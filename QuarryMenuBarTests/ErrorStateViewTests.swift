@@ -3,18 +3,37 @@ import XCTest
 
 @MainActor
 final class ErrorStateViewTests: XCTestCase {
-    func testErrorStateViewWithNotFoundMessage() {
-        let view = ErrorStateView(message: "Failed to start: No such file or directory") {}
-        XCTAssertNotNil(view.body)
+    func testErrorStateViewStoresDisplayConfigurationAndRetryAction() {
+        var didRetry = false
+        let view = ErrorStateView(
+            title: "Quarry Configuration",
+            message: "Pinned CA certificate not found.",
+            hint: "Run quarry login again.",
+            retryLabel: "Reload Config"
+        ) {
+            didRetry = true
+        }
+
+        XCTAssertEqual(view.title, "Quarry Configuration")
+        XCTAssertEqual(view.message, "Pinned CA certificate not found.")
+        XCTAssertEqual(view.hint, "Run quarry login again.")
+        XCTAssertEqual(view.retryLabel, "Reload Config")
+
+        view.onRetry()
+        XCTAssertTrue(didRetry)
     }
 
-    func testErrorStateViewWithCrashMessage() {
-        let view = ErrorStateView(message: "Process exited with code 1") {}
-        XCTAssertNotNil(view.body)
-    }
+    func testErrorStateViewSupportsNilHint() {
+        let view = ErrorStateView(
+            title: "Quarry Unavailable",
+            message: "Could not reach Quarry.",
+            hint: nil,
+            retryLabel: "Retry"
+        ) {}
 
-    func testErrorStateViewWithUnknownMessage() {
-        let view = ErrorStateView(message: "Something unexpected happened") {}
-        XCTAssertNotNil(view.body)
+        XCTAssertEqual(view.title, "Quarry Unavailable")
+        XCTAssertEqual(view.message, "Could not reach Quarry.")
+        XCTAssertNil(view.hint)
+        XCTAssertEqual(view.retryLabel, "Retry")
     }
 }
