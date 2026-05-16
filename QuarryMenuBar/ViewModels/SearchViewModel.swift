@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import os
 
 // MARK: - SearchState
@@ -37,7 +38,7 @@ final class SearchViewModel {
 
     // MARK: Lifecycle
 
-    init(client: QuarryClient = QuarryClient()) {
+    init(client: QuarryClient) {
         self.client = client
     }
 

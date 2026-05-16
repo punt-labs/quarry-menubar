@@ -6,28 +6,33 @@ final class SearchViewModelTests: XCTestCase {
 
     // MARK: Internal
 
-    func testInitialStateIsIdle() {
-        let viewModel = SearchViewModel()
+    override func tearDown() {
+        MockURLProtocol.requestHandler = nil
+        super.tearDown()
+    }
+
+    func testInitialStateIsIdle() throws {
+        let viewModel = try makeViewModel()
         XCTAssertEqual(viewModel.state, .idle)
         XCTAssertEqual(viewModel.query, "")
     }
 
-    func testSearchWithEmptyQueryStaysIdle() {
-        let viewModel = SearchViewModel()
+    func testSearchWithEmptyQueryStaysIdle() throws {
+        let viewModel = try makeViewModel()
         viewModel.search()
         XCTAssertEqual(viewModel.state, .idle)
     }
 
-    func testClearResetsState() {
-        let viewModel = SearchViewModel()
+    func testClearResetsState() throws {
+        let viewModel = try makeViewModel()
         viewModel.query = "test"
         viewModel.clear()
         XCTAssertEqual(viewModel.query, "")
         XCTAssertEqual(viewModel.state, .idle)
     }
 
-    func testSearchWithWhitespaceOnlyStaysIdle() {
-        let viewModel = SearchViewModel()
+    func testSearchWithWhitespaceOnlyStaysIdle() throws {
+        let viewModel = try makeViewModel()
         viewModel.query = "   "
         viewModel.search()
         XCTAssertEqual(viewModel.state, .idle)
@@ -44,21 +49,21 @@ final class SearchViewModelTests: XCTestCase {
 
     // MARK: - Collection Filtering
 
-    func testInitialCollectionStateIsEmpty() {
-        let viewModel = SearchViewModel()
+    func testInitialCollectionStateIsEmpty() throws {
+        let viewModel = try makeViewModel()
         XCTAssertTrue(viewModel.availableCollections.isEmpty)
         XCTAssertNil(viewModel.selectedCollection)
     }
 
-    func testSelectedCollectionDoesNotSearchWithEmptyQuery() {
-        let viewModel = SearchViewModel()
+    func testSelectedCollectionDoesNotSearchWithEmptyQuery() throws {
+        let viewModel = try makeViewModel()
         viewModel.selectedCollection = "research"
         // Empty query → search() exits early → stays idle
         XCTAssertEqual(viewModel.state, .idle)
     }
 
     func testLoadCollectionsPopulatesAndSortsList() async throws {
-        let (client, _) = try mockClient()
+        let client = try mockClient()
 
         MockURLProtocol.requestHandler = { _ in
             jsonResponse("""
@@ -79,7 +84,7 @@ final class SearchViewModelTests: XCTestCase {
     }
 
     func testLoadCollectionsHandlesError() async throws {
-        let (client, _) = try mockClient()
+        let client = try mockClient()
 
         MockURLProtocol.requestHandler = { _ in
             jsonResponse(#"{"error": "server error"}"#, statusCode: 500)
@@ -91,7 +96,7 @@ final class SearchViewModelTests: XCTestCase {
     }
 
     func testSearchPassesCollectionParameter() async throws {
-        let (client, _) = try mockClient()
+        let client = try mockClient()
 
         var capturedURL: URL?
         MockURLProtocol.requestHandler = { request in
@@ -116,31 +121,7 @@ final class SearchViewModelTests: XCTestCase {
 
     // MARK: Private
 
-    // MARK: - Helpers
-
-    /// Creates a QuarryClient with a mock session and a temporary port file.
-    /// Returns the client and the temp directory (caller should clean up).
-    private func mockClient() throws -> (QuarryClient, URL) {
-        let quarryDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".quarry")
-            .appendingPathComponent("data")
-            .appendingPathComponent("vm-test-\(UUID())")
-        try FileManager.default.createDirectory(
-            at: quarryDir,
-            withIntermediateDirectories: true
-        )
-        let portFile = quarryDir.appendingPathComponent("serve.port")
-        try "9999".write(to: portFile, atomically: true, encoding: .utf8)
-        addTeardownBlock { try? FileManager.default.removeItem(at: quarryDir) }
-
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
-        let session = URLSession(configuration: config)
-
-        let client = QuarryClient(
-            databaseName: quarryDir.lastPathComponent,
-            session: session
-        )
-        return (client, quarryDir)
+    private func makeViewModel() throws -> SearchViewModel {
+        try SearchViewModel(client: mockClient())
     }
 }

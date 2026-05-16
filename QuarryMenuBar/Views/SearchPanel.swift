@@ -6,6 +6,8 @@ struct SearchPanel: View {
 
     @Bindable var viewModel: SearchViewModel
 
+    let allowsFinderReveal: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             searchField
@@ -13,7 +15,11 @@ struct SearchPanel: View {
             if let selected = viewModel.selectedResult {
                 detailHeader(for: selected)
                 Divider()
-                ResultDetail(result: selected, client: viewModel.client)
+                ResultDetail(
+                    result: selected,
+                    client: viewModel.client,
+                    allowsFinderReveal: allowsFinderReveal
+                )
             } else {
                 resultsList
                     .animation(.easeInOut(duration: 0.15), value: viewModel.state)
@@ -205,15 +211,6 @@ struct SearchPanel: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(result.text, forType: .string)
-            } label: {
-                Label("Copy", systemImage: "doc.on.doc")
-                    .font(.subheadline)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

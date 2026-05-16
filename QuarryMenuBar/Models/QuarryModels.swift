@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - HealthResponse
 
-struct HealthResponse: Codable, Sendable {
+struct HealthResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case status
         case uptimeSeconds = "uptime_seconds"
@@ -15,7 +15,7 @@ struct HealthResponse: Codable, Sendable {
 
 // MARK: - SearchResponse
 
-struct SearchResponse: Codable, Sendable {
+struct SearchResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case query
         case totalResults = "total_results"
@@ -30,7 +30,7 @@ struct SearchResponse: Codable, Sendable {
 
 // MARK: - SearchResult
 
-struct SearchResult: Codable, Sendable, Identifiable {
+struct SearchResult: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case documentName = "document_name"
         case collection
@@ -39,6 +39,9 @@ struct SearchResult: Codable, Sendable, Identifiable {
         case text
         case pageType = "page_type"
         case sourceFormat = "source_format"
+        case agentHandle = "agent_handle"
+        case memoryType = "memory_type"
+        case summary
         case similarity
     }
 
@@ -49,6 +52,9 @@ struct SearchResult: Codable, Sendable, Identifiable {
     let text: String
     let pageType: String
     let sourceFormat: String
+    let agentHandle: String?
+    let memoryType: String?
+    let summary: String?
     let similarity: Double
 
     var id: String {
@@ -59,7 +65,7 @@ struct SearchResult: Codable, Sendable, Identifiable {
 
 // MARK: - DocumentsResponse
 
-struct DocumentsResponse: Codable, Sendable {
+struct DocumentsResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case totalDocuments = "total_documents"
         case documents
@@ -72,7 +78,7 @@ struct DocumentsResponse: Codable, Sendable {
 
 // MARK: - DocumentInfo
 
-struct DocumentInfo: Codable, Sendable, Identifiable {
+struct DocumentInfo: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case documentName = "document_name"
         case documentPath = "document_path"
@@ -99,7 +105,7 @@ struct DocumentInfo: Codable, Sendable, Identifiable {
 
 // MARK: - CollectionsResponse
 
-struct CollectionsResponse: Codable, Sendable {
+struct CollectionsResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case totalCollections = "total_collections"
         case collections
@@ -112,7 +118,7 @@ struct CollectionsResponse: Codable, Sendable {
 
 // MARK: - CollectionInfo
 
-struct CollectionInfo: Codable, Sendable, Identifiable {
+struct CollectionInfo: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case collection
         case documentCount = "document_count"
@@ -131,29 +137,82 @@ struct CollectionInfo: Codable, Sendable, Identifiable {
 
 // MARK: - StatusResponse
 
-struct StatusResponse: Codable, Sendable {
+struct StatusResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case documentCount = "document_count"
         case collectionCount = "collection_count"
         case chunkCount = "chunk_count"
+        case registeredDirectories = "registered_directories"
         case databasePath = "database_path"
         case databaseSizeBytes = "database_size_bytes"
         case embeddingModel = "embedding_model"
+        case provider
         case embeddingDimension = "embedding_dimension"
     }
 
     let documentCount: Int
     let collectionCount: Int
     let chunkCount: Int
+    let registeredDirectories: Int?
     let databasePath: String
     let databaseSizeBytes: Int
     let embeddingModel: String
+    let provider: String?
     let embeddingDimension: Int
+
+}
+
+// MARK: - DatabasesResponse
+
+struct DatabasesResponse: Codable {
+    enum CodingKeys: String, CodingKey {
+        case totalDatabases = "total_databases"
+        case databases
+    }
+
+    let totalDatabases: Int
+    let databases: [DatabaseSummary]
+
+}
+
+// MARK: - DatabaseSummary
+
+struct DatabaseSummary: Codable, Identifiable, Equatable {
+    enum CodingKeys: String, CodingKey {
+        case name
+        case documentCount = "document_count"
+        case sizeBytes = "size_bytes"
+        case sizeDescription = "size_description"
+    }
+
+    let name: String
+    let documentCount: Int
+    let sizeBytes: Int
+    let sizeDescription: String
+
+    var id: String {
+        name
+    }
+
+}
+
+// MARK: - ShowPageResponse
+
+struct ShowPageResponse: Codable {
+    enum CodingKeys: String, CodingKey {
+        case documentName = "document_name"
+        case pageNumber = "page_number"
+        case text
+    }
+
+    let documentName: String
+    let pageNumber: Int
+    let text: String
 
 }
 
 // MARK: - ErrorResponse
 
-struct ErrorResponse: Codable, Sendable {
+struct ErrorResponse: Codable {
     let error: String
 }

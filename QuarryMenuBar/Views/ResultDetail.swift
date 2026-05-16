@@ -7,6 +7,7 @@ struct ResultDetail: View {
 
     let result: SearchResult
     let client: QuarryClient
+    let allowsFinderReveal: Bool
 
     var body: some View {
         let isCode = SyntaxHighlighter.isCodeFormat(result.sourceFormat)
@@ -41,9 +42,11 @@ struct ResultDetail: View {
         }
         .task(id: taskID) {
             highlightOutput = nil
+            let displayText = await resolvedDetailText()
+            guard !Task.isCancelled else { return }
             let fontSize: CGFloat = isCode ? 11 : 13
             let newOutput = await SyntaxHighlighter.highlight(
-                result.text,
+                displayText,
                 format: result.sourceFormat,
                 fontSize: fontSize,
                 theme: resolvedTheme,
@@ -79,29 +82,51 @@ struct ResultDetail: View {
                     .font(.caption)
                 Label(result.collection, systemImage: "folder")
                     .font(.caption)
-                    .onTapGesture {
+                if allowsFinderReveal {
+                    Button {
                         Task { await revealInFinder() }
+                    } label: {
+                        Label("Reveal in Finder", systemImage: "folder.badge.gearshape")
+                            .font(.caption)
                     }
+                    .buttonStyle(.plain)
                     .help("Reveal source file in Finder")
+                }
             }
             .foregroundStyle(.secondary)
         }
     }
 
+    private func resolvedDetailText() async -> String {
+        do {
+            let response = try await client.show(
+                document: result.documentName,
+                page: result.pageNumber,
+                collection: result.collection
+            )
+            return response.text
+        } catch {
+            return result.text
+        }
+    }
+
     private func revealInFinder() async {
+        guard allowsFinderReveal else { return }
         do {
             let docs = try await client.documents(collection: result.collection)
             if let info = docs.documents.first(where: { $0.documentName == result.documentName }) {
+                guard FileManager.default.fileExists(atPath: info.documentPath) else {
+                    openFallbackDataDirectory()
+                    return
+                }
                 let url = URL(fileURLWithPath: info.documentPath)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 activateFinder()
+                return
             }
+            openFallbackDataDirectory()
         } catch {
-            // Fall back to opening the quarry data directory
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            let dataDir = home.appendingPathComponent(".quarry").appendingPathComponent("data")
-            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dataDir.path)
-            activateFinder()
+            openFallbackDataDirectory()
         }
     }
 
@@ -113,5 +138,15 @@ struct ResultDetail: View {
         NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder")
             .first?
             .activate()
+    }
+
+    private func openFallbackDataDirectory() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let dataDir = home
+            .appendingPathComponent(".punt-labs")
+            .appendingPathComponent("quarry")
+            .appendingPathComponent("data")
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: dataDir.path)
+        activateFinder()
     }
 }

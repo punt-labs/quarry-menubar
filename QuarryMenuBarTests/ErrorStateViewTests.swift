@@ -3,18 +3,23 @@ import XCTest
 
 @MainActor
 final class ErrorStateViewTests: XCTestCase {
-    func testErrorStateViewWithNotFoundMessage() {
-        let view = ErrorStateView(message: "Failed to start: No such file or directory") {}
+    func testErrorStateViewWithHintBuildsBody() {
+        let view = ErrorStateView(
+            title: "Quarry Configuration",
+            message: "Pinned CA certificate not found.",
+            hint: "Run quarry login again.",
+            retryLabel: "Reload Config"
+        ) {}
         XCTAssertNotNil(view.body)
     }
 
-    func testErrorStateViewWithCrashMessage() {
-        let view = ErrorStateView(message: "Process exited with code 1") {}
-        XCTAssertNotNil(view.body)
-    }
-
-    func testErrorStateViewWithUnknownMessage() {
-        let view = ErrorStateView(message: "Something unexpected happened") {}
+    func testErrorStateViewWithoutHintBuildsBody() {
+        let view = ErrorStateView(
+            title: "Quarry Unavailable",
+            message: "Could not reach Quarry.",
+            hint: nil,
+            retryLabel: "Retry"
+        ) {}
         XCTAssertNotNil(view.body)
     }
 }

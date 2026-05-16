@@ -6,7 +6,7 @@ I am a principal engineer. Every change I make leaves the codebase in a better s
 
 ## Relationship to Parent Project
 
-This is a **sub-project** of [quarry](https://github.com/punt-labs/quarry) (`../quarry`). Quarry is a Python CLI/MCP server for OCR document search backed by LanceDB. This repo is the macOS menu bar companion app — a native Swift/SwiftUI frontend that talks to `quarry serve` over localhost HTTP.
+This is a **sub-project** of [quarry](https://github.com/punt-labs/quarry) (`../quarry`). Quarry is a Python CLI/MCP server for OCR document search backed by LanceDB. This repo is the macOS menu bar companion app — a native Swift/SwiftUI frontend that talks to Quarry over the current connection model (local TLS on `localhost` or a configured remote server).
 
 Both repos share the same development workflow conventions (branch discipline, micro-commits, session close protocol, beads issue tracking). The Python-specific standards (ruff, mypy, uv) do not apply here; the Swift equivalents (SwiftFormat, SwiftLint, xcodebuild) do.
 
@@ -64,40 +64,40 @@ Version lives in `project.yml` (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`)
 
 ## Architecture
 
-**macOS 14+ (Sonoma)**, Swift 5.9+, SwiftUI. No third-party dependencies.
+**macOS 14+ (Sonoma)**, Swift 5.9+, SwiftUI. One third-party package: `HighlightSwift`.
 
 ### App Lifecycle
 
-`QuarryMenuBarApp` → `MenuBarExtra(.window)` → `ContentPanel` → routes by `DaemonState`:
+`QuarryMenuBarApp` → `MenuBarExtra(.window)` → `ContentPanel` → routes by `ConnectionState`:
 
-- `.stopped` → Start button
-- `.starting` → ProgressView
-- `.running` → `SearchPanel` (the main UI)
-- `.error` → `ErrorStateView` with restart
+- `.idle` / `.connecting` → ProgressView
+- `.connected` → `SearchPanel` (the main UI)
+- `.unavailable` → `ErrorStateView` with retry
+- `.misconfigured` → `ErrorStateView` with config guidance
 
-The app is `LSUIElement: YES` (no dock icon, no main menu — menu bar only). Sandbox is disabled (`com.apple.security.app-sandbox: false`) because the app spawns `quarry serve` as a subprocess.
+The app is `LSUIElement: YES` (no dock icon, no main menu — menu bar only). Sandbox is disabled (`com.apple.security.app-sandbox: false`) so the app can make network requests freely and reveal local files in Finder when connected to local Quarry.
 
-### Port Discovery Flow
+### Connection Resolution Flow
 
-This is the critical integration point with the quarry backend:
+This is the critical integration point with the Quarry backend:
 
-1. `DaemonManager.start()` spawns `quarry serve --db <name>` as a `Process`
-2. The quarry server writes its port to `~/.quarry/data/<db>/serve.port`
-3. `QuarryClient.readPort()` reads that file to discover the port
-4. All API calls go to `http://127.0.0.1:<port>/<endpoint>`
+1. `ConnectionProfileLoader` checks `~/.punt-labs/mcp-proxy/quarry.toml`
+2. If a remote profile exists, the app uses that server as authoritative
+3. Otherwise the app falls back to local Quarry at `https://localhost:8420`
+4. `QuarryClient` talks to the resolved base URL with optional Bearer auth and a pinned CA
 
-If the port file doesn't exist, `QuarryClient` throws `.serverNotRunning`. The daemon manager schedules a health check 2 seconds after spawn to verify the server is responsive.
+There is no subprocess ownership, no `serve.port` discovery, and no runtime dependency on the `quarry` CLI being on `PATH`.
 
 ### MVVM + @Observable
 
 The app uses Swift 5.9's `@Observable` macro (not the older `ObservableObject` protocol):
 
 - **Models** (`QuarryModels.swift`): Plain `Codable & Sendable` structs with `snake_case` JSON keys via `convertFromSnakeCase` strategy
-- **Services**: `QuarryClient` (Sendable, stateless HTTP), `DaemonManager` (@MainActor @Observable, owns Process lifecycle), `HotkeyManager` (@MainActor, NSEvent monitors)
+- **Services**: `QuarryClient` (HTTP(S), auth, pinned CA), `ConnectionManager` (@MainActor @Observable, owns connection state), `ConnectionProfileLoader` (parses Quarry config), `HotkeyManager` (@MainActor, NSEvent monitors)
 - **ViewModel**: `SearchViewModel` (@MainActor @Observable) — debounced search with 300ms interval, cancellation support
 - **Views**: SwiftUI with `@Bindable` for viewmodel bindings, `@FocusState` for keyboard focus
 
-`QuarryClient` is injected into both `SearchViewModel` and `ResultDetail` to share the same port discovery path.
+`QuarryClient` is injected into both `SearchViewModel` and `ResultDetail` so search and detail rendering share the same resolved connection.
 
 ### Key API Endpoints
 
@@ -108,6 +108,8 @@ The app uses Swift 5.9's `@Observable` macro (not the older `ObservableObject` p
 | `GET /documents?collection=` | `documents(collection:)` | `DocumentsResponse` with file paths |
 | `GET /collections` | `collections()` | `CollectionsResponse` |
 | `GET /status` | `status()` | `StatusResponse` (db stats) |
+| `GET /databases` | `databases()` | `DatabasesResponse` for the active server database |
+| `GET /show?document=&page=` | `show(document:page:collection:)` | `ShowPageResponse` with full page text |
 
 ### Syntax Highlighting
 
@@ -293,7 +295,7 @@ Three documents track different aspects of the project. Each has a clear trigger
 - [ ] **README updated** if user-facing behavior changed
 - [ ] **PR/FAQ updated** if product direction or risk assumptions shifted
 - [ ] **Quality gates pass**: `make format && make lint && make test`
-- [ ] **Live demo** for features: launch against a real `quarry serve` instance and exercise the feature end-to-end
+- [ ] **Live demo** for features: launch against a real Quarry connection and exercise the feature end-to-end
 
 ### Code Review Flow
 
@@ -321,27 +323,15 @@ git status                  # Must show "up to date with origin"
 
 Work is NOT complete until `git push` succeeds.
 
-### Executable Resolution
-
-GUI apps don't inherit the shell's PATH, so `/usr/bin/env quarry` fails at runtime. `ExecutableResolver` searches well-known install locations at startup:
-
-1. `~/.local/bin/quarry` (uv tool install)
-2. `/usr/local/bin/quarry`
-3. `/opt/homebrew/bin/quarry`
-
-The resolved path is passed to both `DaemonManager` and `CLIDatabaseDiscovery`. If quarry isn't found at any known location, the app falls back to `/usr/bin/env` (will only work if PATH is set, e.g. when launched from a terminal).
-
-To add a new search path, edit `ExecutableResolver.searchPaths`.
-
 ### Testing Against Live Backend
 
 ```bash
 make run    # Build and launch the app
 ```
 
-The app auto-starts `quarry serve` for the persisted database (default: "default"). To test with a specific database, switch via the database picker in the menu bar header — no code changes needed.
+The app follows Quarry's active connection. For local testing, install Quarry and start the service. For remote testing, point Quarry at a remote server with `quarry login <host>`.
 
-**Prerequisite**: `quarry` must be installed with `serve` and `databases` commands. Install from the parent project:
+**Prerequisite**: `quarry` must be installed and configured. Install from the parent project:
 
 ```bash
 cd ../ocr && uv tool install --force .
@@ -351,7 +341,7 @@ cd ../ocr && uv tool install --force .
 
 Identity: `agent: claude` per `.punt-labs/ethos.yaml`. Sub-agent calls (`Agent(subagent_type=…)`) match ethos identity handles.
 
-quarry-menubar is a native macOS Swift/SwiftUI menu-bar app that drives a `quarry serve` subprocess and renders results. Three concerns: (1) Swift/SwiftUI implementation discipline (XcodeGen, SwiftFormat/Lint, @Observable MVVM); (2) the cross-process integration with the quarry HTTP backend (port discovery, lifecycle, executable resolution); (3) macOS-specific surface (menu bar, hotkeys, Dock-less UIElement, sandbox config). Within each row, the worker and evaluator must be distinct handles. Claude is the leader, never the evaluator.
+quarry-menubar is a native macOS Swift/SwiftUI menu-bar app that follows Quarry's connection model and renders results. Three concerns: (1) Swift/SwiftUI implementation discipline (XcodeGen, SwiftFormat/Lint, @Observable MVVM); (2) the HTTP(S) integration with Quarry (connection resolution, TLS/auth, current endpoint contracts); (3) macOS-specific surface (menu bar, hotkeys, Dock-less UIElement, local-vs-remote capability gating). Within each row, the worker and evaluator must be distinct handles. Claude is the leader, never the evaluator.
 
 | Task type | Worker | Evaluator |
 |-----------|--------|-----------|
@@ -359,15 +349,14 @@ quarry-menubar is a native macOS Swift/SwiftUI menu-bar app that drives a `quarr
 | Concurrency, Sendable, @MainActor boundaries | `srn` | `csl` |
 | XcodeGen `project.yml`, build settings, schemes | `csl` | `adb` (Lovelace) |
 | SwiftFormat / SwiftLint config alignment | `csl` | `mdm` (Pike) |
-| Daemon lifecycle (`Process`, port file, health check) | `srn` | `bwk` (Pike — Go context for cross-process patterns) |
-| HTTP client / Codable / API contract with quarry | `srn` | `rmh` (Hettinger) |
-| Executable resolution / install-path search | `csl` | `adb` |
+| Connection resolution / config parsing / state | `srn` | `rmh` (Hettinger) |
+| HTTP client / Codable / TLS/auth contract with quarry | `srn` | `rmh` (Hettinger) |
 | Hotkey / NSEvent monitor / global accessibility | `srn` | `dna` (Norman) |
 | Visual / menu-bar UX / search panel layout | `dna` | `edt` (Tufte) |
 | Syntax highlighting / `AttributedString` rendering | `csl` | `dna` |
 | Cross-repo coordination with `quarry` HTTP API | `srn` | `rmh` |
 
-Use the `standard` pipeline for new views, new endpoints, or daemon-lifecycle changes. Use `quick` for SwiftLint fixes or single-file refactors. The "Live demo" Pre-PR check is non-negotiable — every feature must be exercised against a real `quarry serve` before review.
+Use the `standard` pipeline for new views, new endpoints, or connection-model changes. Use `quick` for SwiftLint fixes or single-file refactors. The "Live demo" Pre-PR check is non-negotiable — every feature must be exercised against a real Quarry connection before review.
 
 ## Scratch Files
 
