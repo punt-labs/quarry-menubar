@@ -18,7 +18,10 @@ struct SearchPanel: View {
                 ResultDetail(
                     result: selected,
                     client: viewModel.client,
-                    allowsFinderReveal: allowsFinderReveal
+                    allowsFinderReveal: allowsFinderReveal,
+                    onContentResolved: { content in
+                        detailTextForCopy = content.text
+                    }
                 )
             } else {
                 resultsList
@@ -31,6 +34,16 @@ struct SearchPanel: View {
         .onAppear {
             isSearchFocused = true
         }
+        .onChange(of: viewModel.selectedResult?.id) { _, _ in
+            detailTextForCopy = nil
+        }
+    }
+
+    static func detailTextToCopy(
+        resolvedDetailText: String?,
+        fallbackText: String
+    ) -> String {
+        resolvedDetailText ?? fallbackText
     }
 
     // MARK: Private
@@ -43,6 +56,7 @@ struct SearchPanel: View {
     private static let scrollAnchorUp = UnitPoint(x: 0.5, y: 0.15)
 
     @State private var scrollAnchor: UnitPoint = .top
+    @State private var detailTextForCopy: String?
     @FocusState private var isSearchFocused: Bool
 
     private var collectionPicker: some View {
@@ -213,7 +227,13 @@ struct SearchPanel: View {
             Spacer()
             Button {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(result.text, forType: .string)
+                NSPasteboard.general.setString(
+                    Self.detailTextToCopy(
+                        resolvedDetailText: detailTextForCopy,
+                        fallbackText: result.text
+                    ),
+                    forType: .string
+                )
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
                     .font(.subheadline)

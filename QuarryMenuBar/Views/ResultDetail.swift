@@ -17,6 +17,7 @@ struct ResultDetail: View {
     let result: SearchResult
     let client: QuarryClient
     let allowsFinderReveal: Bool
+    let onContentResolved: @MainActor (ResultDetailContent) -> Void
 
     var body: some View {
         let isCode = SyntaxHighlighter.isCodeFormat(result.sourceFormat)
@@ -68,6 +69,7 @@ struct ResultDetail: View {
                 lightMode: colorScheme == .light
             )
             guard !Task.isCancelled else { return }
+            await onContentResolved(detailContent)
             detailWarningMessage = detailContent.warningMessage
             highlightOutput = newOutput
         }

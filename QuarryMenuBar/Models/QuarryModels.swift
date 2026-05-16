@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - HealthResponse
 
-struct HealthResponse: Codable {
+struct HealthResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case status
         case uptimeSeconds = "uptime_seconds"
@@ -15,7 +15,7 @@ struct HealthResponse: Codable {
 
 // MARK: - SearchResponse
 
-struct SearchResponse: Codable {
+struct SearchResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case query
         case totalResults = "total_results"
@@ -30,7 +30,7 @@ struct SearchResponse: Codable {
 
 // MARK: - SearchResult
 
-struct SearchResult: Codable, Identifiable {
+struct SearchResult: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case documentName = "document_name"
         case collection
@@ -65,7 +65,7 @@ struct SearchResult: Codable, Identifiable {
 
 // MARK: - DocumentsResponse
 
-struct DocumentsResponse: Codable {
+struct DocumentsResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case totalDocuments = "total_documents"
         case documents
@@ -78,7 +78,7 @@ struct DocumentsResponse: Codable {
 
 // MARK: - DocumentInfo
 
-struct DocumentInfo: Codable, Identifiable {
+struct DocumentInfo: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case documentName = "document_name"
         case documentPath = "document_path"
@@ -105,7 +105,7 @@ struct DocumentInfo: Codable, Identifiable {
 
 // MARK: - CollectionsResponse
 
-struct CollectionsResponse: Codable {
+struct CollectionsResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case totalCollections = "total_collections"
         case collections
@@ -118,7 +118,7 @@ struct CollectionsResponse: Codable {
 
 // MARK: - CollectionInfo
 
-struct CollectionInfo: Codable, Identifiable {
+struct CollectionInfo: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case collection
         case documentCount = "document_count"
@@ -137,7 +137,7 @@ struct CollectionInfo: Codable, Identifiable {
 
 // MARK: - StatusResponse
 
-struct StatusResponse: Codable {
+struct StatusResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case documentCount = "document_count"
         case collectionCount = "collection_count"
@@ -164,7 +164,7 @@ struct StatusResponse: Codable {
 
 // MARK: - DatabasesResponse
 
-struct DatabasesResponse: Codable {
+struct DatabasesResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case totalDatabases = "total_databases"
         case databases
@@ -177,7 +177,7 @@ struct DatabasesResponse: Codable {
 
 // MARK: - DatabaseSummary
 
-struct DatabaseSummary: Codable, Identifiable, Equatable {
+struct DatabaseSummary: Codable, Identifiable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case name
         case documentCount = "document_count"
@@ -198,7 +198,7 @@ struct DatabaseSummary: Codable, Identifiable, Equatable {
 
 // MARK: - ShowPageResponse
 
-struct ShowPageResponse: Codable {
+struct ShowPageResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case documentName = "document_name"
         case pageNumber = "page_number"
@@ -213,6 +213,6 @@ struct ShowPageResponse: Codable {
 
 // MARK: - ErrorResponse
 
-struct ErrorResponse: Codable {
+struct ErrorResponse: Codable, Sendable {
     let error: String
 }

@@ -94,6 +94,26 @@ final class ConnectionManagerTests: XCTestCase {
         XCTAssertEqual(manager.failureOrigin, .localDefault)
     }
 
+    func testRefreshPrefersStatusDatabasePathOverFirstDatabaseEntry() async throws {
+        let profile = try testProfile(
+            baseURL: XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420")),
+            mode: .remote,
+            origin: .proxyConfig,
+            hostDisplayName: "okinos.user.home.lab"
+        )
+        let manager = ConnectionManager(
+            profileLoader: StubProfileLoader { profile },
+            clientFactory: { try mockClient(profile: $0) }
+        )
+
+        MockURLProtocol.requestHandler = preferredDatabaseHandler
+
+        await manager.refresh()
+
+        XCTAssertEqual(manager.state, .connected)
+        XCTAssertEqual(manager.activeDatabaseName, "beta")
+    }
+
     func testRefreshMapsConfigurationClientFailureToMisconfigured() async throws {
         let profile = try testProfile(baseURL: XCTUnwrap(URL(string: "http://127.0.0.1:8420")))
         let manager = ConnectionManager(
@@ -290,5 +310,58 @@ final class ConnectionManagerTests: XCTestCase {
             """,
             url: url
         )
+    }
+
+    private func preferredDatabaseHandler(
+        request: URLRequest
+    ) throws -> (Data, HTTPURLResponse) {
+        let requestURL = try XCTUnwrap(request.url)
+        switch requestURL.path {
+        case "/health":
+            return jsonResponse(#"{"status":"ok","uptime_seconds":1.0}"#, url: requestURL)
+        case "/status":
+            return jsonResponse(
+                """
+                {
+                    "document_count": 2,
+                    "collection_count": 1,
+                    "chunk_count": 6,
+                    "registered_directories": 1,
+                    "database_path": "/srv/quarry/data/beta/lancedb",
+                    "database_size_bytes": 1024,
+                    "embedding_model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+                    "provider": "CPUExecutionProvider (fast)",
+                    "embedding_dimension": 768
+                }
+                """,
+                url: requestURL
+            )
+        case "/databases":
+            return jsonResponse(
+                """
+                {
+                    "total_databases": 2,
+                    "databases": [
+                        {
+                            "name": "alpha",
+                            "document_count": 4,
+                            "size_bytes": 1024,
+                            "size_description": "1.0 KB"
+                        },
+                        {
+                            "name": "beta",
+                            "document_count": 2,
+                            "size_bytes": 512,
+                            "size_description": "512 B"
+                        }
+                    ]
+                }
+                """,
+                url: requestURL
+            )
+        default:
+            XCTFail("Unexpected request: \(requestURL.absoluteString)")
+            return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
+        }
     }
 }

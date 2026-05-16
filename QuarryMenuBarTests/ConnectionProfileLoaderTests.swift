@@ -127,11 +127,54 @@ final class ConnectionProfileLoaderTests: XCTestCase {
         )
 
         XCTAssertThrowsError(try loader.load()) { error in
-            guard case .missingPinnedCACertificate = error as? ConnectionProfileLoaderError else {
-                XCTFail("Expected missingPinnedCACertificate, got \(error)")
+            guard case let .missingProxyCACertificate(url) = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected missingProxyCACertificate, got \(error)")
                 return
             }
+            XCTAssertEqual(url, proxyConfig)
         }
+    }
+
+    func testProxyConfigRejectsInsecureRemoteProfile() throws {
+        let tempDirectory = try XCTUnwrap(tempDirectory)
+        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+        try """
+        [quarry]
+        url = "http://remote.example:8420"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case let .insecureRemoteProxyURL(url) = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected insecureRemoteProxyURL, got \(error)")
+                return
+            }
+            XCTAssertEqual(url, "http://remote.example:8420")
+        }
+    }
+
+    func testProxyConfigAllowsInsecureLoopbackProfile() throws {
+        let tempDirectory = try XCTUnwrap(tempDirectory)
+        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+        try """
+        [quarry]
+        url = "ws://127.0.0.1:8420/mcp"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.mode, .local)
+        XCTAssertEqual(profile.baseURL.absoluteString, "http://127.0.0.1:8420")
+        XCTAssertNil(profile.caCertificateURL)
     }
 
     func testProxyConfigRejectsUnsupportedAuthorizationHeader() throws {

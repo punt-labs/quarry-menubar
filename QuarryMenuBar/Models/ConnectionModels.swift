@@ -2,21 +2,21 @@ import Foundation
 
 // MARK: - ConnectionMode
 
-enum ConnectionMode: String, Equatable {
+enum ConnectionMode: String, Equatable, Sendable {
     case local
     case remote
 }
 
 // MARK: - ConnectionOrigin
 
-enum ConnectionOrigin: String, Equatable {
+enum ConnectionOrigin: String, Equatable, Sendable {
     case localDefault
     case proxyConfig
 }
 
 // MARK: - ConnectionProfile
 
-struct ConnectionProfile: Equatable {
+struct ConnectionProfile: Equatable, Sendable {
 
     // MARK: - Test Support
 
@@ -57,7 +57,7 @@ struct ConnectionProfile: Equatable {
 
 // MARK: - ConnectionState
 
-enum ConnectionState: Equatable {
+enum ConnectionState: Equatable, Sendable {
     case idle
     case connecting
     case connected

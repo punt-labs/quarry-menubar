@@ -4,6 +4,20 @@ import XCTest
 // MARK: - QuarryModelTests
 
 final class QuarryModelTests: XCTestCase {
+
+    // MARK: Internal
+
+    func testModelsConformToSendable() {
+        assertSendable(makeHealthResponse())
+        assertSendable(makeSearchResponse())
+        assertSendable(makeDocumentsResponse())
+        assertSendable(makeCollectionsResponse())
+        assertSendable(makeStatusResponse())
+        assertSendable(makeDatabasesResponse())
+        assertSendable(makeShowPageResponse())
+        assertSendable(ErrorResponse(error: "boom"))
+    }
+
     func testHealthResponseDecoding() throws {
         let json = """
         {"status": "ok", "uptime_seconds": 42.5}
@@ -174,6 +188,104 @@ final class QuarryModelTests: XCTestCase {
             from: XCTUnwrap(json.data(using: .utf8))
         )
         XCTAssertEqual(result.id, "test.pdf-1-2")
+    }
+
+    // MARK: Private
+
+    private func assertSendable(_ value: some Sendable) {
+        _ = value
+    }
+
+    private func makeHealthResponse() -> HealthResponse {
+        HealthResponse(status: "ok", uptimeSeconds: 1.0)
+    }
+
+    private func makeSearchResponse() -> SearchResponse {
+        SearchResponse(
+            query: "hello",
+            totalResults: 1,
+            results: [
+                SearchResult(
+                    documentName: "README.md",
+                    collection: "default",
+                    pageNumber: 1,
+                    chunkIndex: 0,
+                    text: "Hello",
+                    pageType: "text",
+                    sourceFormat: ".md",
+                    agentHandle: nil,
+                    memoryType: nil,
+                    summary: nil,
+                    similarity: 0.9
+                )
+            ]
+        )
+    }
+
+    private func makeDocumentsResponse() -> DocumentsResponse {
+        DocumentsResponse(
+            totalDocuments: 1,
+            documents: [
+                DocumentInfo(
+                    documentName: "README.md",
+                    documentPath: "/tmp/README.md",
+                    collection: "default",
+                    totalPages: 1,
+                    chunkCount: 1,
+                    indexedPages: 1,
+                    ingestionTimestamp: "2026-01-01T00:00:00Z"
+                )
+            ]
+        )
+    }
+
+    private func makeCollectionsResponse() -> CollectionsResponse {
+        CollectionsResponse(
+            totalCollections: 1,
+            collections: [
+                CollectionInfo(
+                    collection: "default",
+                    documentCount: 1,
+                    chunkCount: 1
+                )
+            ]
+        )
+    }
+
+    private func makeStatusResponse() -> StatusResponse {
+        StatusResponse(
+            documentCount: 1,
+            collectionCount: 1,
+            chunkCount: 1,
+            registeredDirectories: 1,
+            databasePath: "/tmp/default/lancedb",
+            databaseSizeBytes: 1024,
+            embeddingModel: "Snowflake/snowflake-arctic-embed-m-v1.5",
+            provider: "CPUExecutionProvider (fast)",
+            embeddingDimension: 768
+        )
+    }
+
+    private func makeDatabasesResponse() -> DatabasesResponse {
+        DatabasesResponse(
+            totalDatabases: 1,
+            databases: [
+                DatabaseSummary(
+                    name: "default",
+                    documentCount: 1,
+                    sizeBytes: 1024,
+                    sizeDescription: "1.0 KB"
+                )
+            ]
+        )
+    }
+
+    private func makeShowPageResponse() -> ShowPageResponse {
+        ShowPageResponse(
+            documentName: "README.md",
+            pageNumber: 1,
+            text: "Hello"
+        )
     }
 }
 

@@ -27,7 +27,8 @@ final class ConnectionManager {
     private(set) var failureOrigin: ConnectionOrigin?
 
     var activeDatabaseName: String? {
-        databases.first?.name ?? databaseName(from: status?.databasePath)
+        databaseName(from: status?.databasePath)
+            ?? (databases.count == 1 ? databases.first?.name : nil)
     }
 
     var allowsLocalFileAccess: Bool {

@@ -12,6 +12,8 @@ enum ConnectionProfileLoaderError: LocalizedError {
     case malformedProxyConfig(URL, String)
     case missingProxyURL(URL)
     case invalidProxyURL(String)
+    case insecureRemoteProxyURL(String)
+    case missingProxyCACertificate(URL)
     case missingPinnedCACertificate(URL)
     case invalidAuthorizationHeader(String)
     case missingLocalCACertificate(URL)
@@ -26,6 +28,10 @@ enum ConnectionProfileLoaderError: LocalizedError {
             "Quarry connection profile at \(url.path) is missing a URL."
         case let .invalidProxyURL(value):
             "Invalid Quarry connection URL: \(value)"
+        case let .insecureRemoteProxyURL(value):
+            "Remote Quarry connections must use `https://` or `wss://`: \(value)"
+        case let .missingProxyCACertificate(url):
+            "Quarry connection profile at \(url.path) is missing a `ca_cert` entry for its HTTPS connection."
         case let .missingPinnedCACertificate(url):
             "Pinned CA certificate not found at \(url.path)."
         case let .invalidAuthorizationHeader(value):
@@ -40,6 +46,8 @@ enum ConnectionProfileLoaderError: LocalizedError {
         case .malformedProxyConfig,
              .missingProxyURL,
              .invalidProxyURL,
+             .insecureRemoteProxyURL,
+             .missingProxyCACertificate,
              .missingPinnedCACertificate,
              .invalidAuthorizationHeader:
             .proxyConfig
@@ -154,10 +162,15 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
             throw ConnectionProfileLoaderError.invalidProxyURL(urlString)
         }
 
+        let mode: ConnectionMode = isLocalHost(host) ? .local : .remote
+        if mode == .remote, baseScheme != "https" {
+            throw ConnectionProfileLoaderError.insecureRemoteProxyURL(urlString)
+        }
+
         let caURL = try resolvedCAURL(path: config.caCertPath, required: baseScheme == "https")
         let token = try parseBearerToken(from: config.authorizationHeader)
         return ConnectionProfile(
-            mode: isLocalHost(host) ? .local : .remote,
+            mode: mode,
             origin: .proxyConfig,
             baseURL: baseURL,
             caCertificateURL: caURL,
@@ -280,7 +293,7 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
     ) throws -> URL? {
         guard let path else {
             if required {
-                throw ConnectionProfileLoaderError.missingPinnedCACertificate(proxyConfigURL)
+                throw ConnectionProfileLoaderError.missingProxyCACertificate(proxyConfigURL)
             }
             return nil
         }
