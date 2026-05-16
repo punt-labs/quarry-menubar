@@ -24,6 +24,7 @@ final class ConnectionManager {
     private(set) var status: StatusResponse?
     private(set) var databases: [DatabaseSummary] = []
     private(set) var searchViewModel: SearchViewModel?
+    private(set) var failureOrigin: ConnectionOrigin?
 
     var activeDatabaseName: String? {
         databases.first?.name ?? databaseName(from: status?.databasePath)
@@ -34,14 +35,21 @@ final class ConnectionManager {
     }
 
     func refresh() async {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+
         state = .connecting
+        profile = nil
         status = nil
         databases = []
         searchViewModel = nil
+        failureOrigin = nil
 
         do {
             let resolvedProfile = try profileLoader.load()
+            guard generation == refreshGeneration else { return }
             profile = resolvedProfile
+            failureOrigin = resolvedProfile.origin
 
             let client = try clientFactory(resolvedProfile)
             async let healthResponse = client.health()
@@ -49,23 +57,28 @@ final class ConnectionManager {
             async let databasesResponse = client.databases()
 
             _ = try await healthResponse
-            status = try await statusResponse
+            let resolvedStatus = try await statusResponse
             let resolvedDatabases = try await databasesResponse
+            guard generation == refreshGeneration else { return }
+            status = resolvedStatus
             databases = resolvedDatabases.databases
             searchViewModel = SearchViewModel(client: client)
             state = .connected
         } catch let error as ConnectionProfileLoaderError {
-            profile = nil
+            guard generation == refreshGeneration else { return }
+            failureOrigin = error.connectionOrigin
             applyFailure(
                 message: error.localizedDescription,
                 configurationIssue: true
             )
         } catch let error as QuarryClientError {
+            guard generation == refreshGeneration else { return }
             applyFailure(
                 message: error.localizedDescription,
                 configurationIssue: error.isConfigurationIssue
             )
         } catch {
+            guard generation == refreshGeneration else { return }
             applyFailure(
                 message: error.localizedDescription,
                 configurationIssue: false
@@ -77,6 +90,7 @@ final class ConnectionManager {
 
     private let profileLoader: any ConnectionProfileLoading
     private let clientFactory: (ConnectionProfile) throws -> QuarryClient
+    private var refreshGeneration = 0
 
     private func applyFailure(
         message: String,

@@ -4,6 +4,8 @@ import XCTest
 @MainActor
 final class ConnectionManagerTests: XCTestCase {
 
+    // MARK: Internal
+
     override func tearDown() {
         MockURLProtocol.requestHandler = nil
         super.tearDown()
@@ -89,6 +91,7 @@ final class ConnectionManagerTests: XCTestCase {
         }
         XCTAssertTrue(message.contains("CA certificate"))
         XCTAssertNil(manager.searchViewModel)
+        XCTAssertEqual(manager.failureOrigin, .localDefault)
     }
 
     func testRefreshMapsConfigurationClientFailureToMisconfigured() async throws {
@@ -132,6 +135,135 @@ final class ConnectionManagerTests: XCTestCase {
         }
         XCTAssertTrue(message.contains("Could not reach Quarry"))
         XCTAssertEqual(manager.profile, profile)
+        XCTAssertEqual(manager.failureOrigin, .proxyConfig)
         XCTAssertFalse(manager.allowsLocalFileAccess)
+    }
+
+    func testRefreshPreservesProxyFailureOriginForHints() async {
+        let proxyConfigURL = FileManager.default.temporaryDirectory.appendingPathComponent("quarry.toml")
+        let manager = ConnectionManager(
+            profileLoader: StubProfileLoader {
+                throw ConnectionProfileLoaderError.missingProxyURL(proxyConfigURL)
+            },
+            clientFactory: { _ in
+                XCTFail("clientFactory should not be called when load fails")
+                return try mockClient()
+            }
+        )
+
+        await manager.refresh()
+
+        guard case let .misconfigured(message) = manager.state else {
+            XCTFail("Expected misconfigured state, got \(manager.state)")
+            return
+        }
+        XCTAssertTrue(message.contains("missing a URL"))
+        XCTAssertEqual(manager.failureOrigin, .proxyConfig)
+        XCTAssertNil(manager.profile)
+    }
+
+    func testConcurrentRefreshKeepsNewestResult() async throws {
+        let firstProfile = try testProfile(
+            baseURL: XCTUnwrap(URL(string: "http://alpha.test:8420")),
+            hostDisplayName: "alpha.test"
+        )
+        let secondProfile = try testProfile(
+            baseURL: XCTUnwrap(URL(string: "http://beta.test:8420")),
+            mode: .remote,
+            origin: .proxyConfig,
+            hostDisplayName: "beta.test"
+        )
+
+        var loadCount = 0
+        let manager = ConnectionManager(
+            profileLoader: StubProfileLoader {
+                loadCount += 1
+                return loadCount == 1 ? firstProfile : secondProfile
+            },
+            clientFactory: { try mockClient(profile: $0) }
+        )
+
+        MockURLProtocol.requestHandler = concurrentRefreshHandler
+
+        let firstRefresh = Task { await manager.refresh() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let secondRefresh = Task { await manager.refresh() }
+
+        await firstRefresh.value
+        await secondRefresh.value
+
+        XCTAssertEqual(manager.state, .connected)
+        XCTAssertEqual(manager.profile, secondProfile)
+        XCTAssertEqual(manager.activeDatabaseName, "beta")
+        XCTAssertEqual(manager.failureOrigin, .proxyConfig)
+        XCTAssertFalse(manager.allowsLocalFileAccess)
+    }
+
+    // MARK: Private
+
+    private func concurrentRefreshHandler(
+        request: URLRequest
+    ) throws -> (Data, HTTPURLResponse) {
+        let requestURL = try XCTUnwrap(request.url)
+        let host = try XCTUnwrap(requestURL.host)
+        let databaseName = host == "alpha.test" ? "alpha" : "beta"
+
+        if host == "alpha.test" {
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+
+        switch requestURL.path {
+        case "/health":
+            return jsonResponse(#"{"status":"ok","uptime_seconds":1.0}"#, url: requestURL)
+        case "/status":
+            return statusResponse(databaseName: databaseName, url: requestURL)
+        case "/databases":
+            return databasesResponse(databaseName: databaseName, url: requestURL)
+        default:
+            XCTFail("Unexpected request: \(requestURL.absoluteString)")
+            return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
+        }
+    }
+
+    private func statusResponse(
+        databaseName: String,
+        url: URL
+    ) -> (Data, HTTPURLResponse) {
+        jsonResponse(
+            """
+            {
+                "document_count": 1,
+                "collection_count": 1,
+                "chunk_count": 1,
+                "registered_directories": 0,
+                "database_path": "/Users/test/.punt-labs/quarry/data/\(databaseName)/lancedb",
+                "database_size_bytes": 512,
+                "embedding_model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+                "provider": "CPUExecutionProvider (fast)",
+                "embedding_dimension": 768
+            }
+            """,
+            url: url
+        )
+    }
+
+    private func databasesResponse(
+        databaseName: String,
+        url: URL
+    ) -> (Data, HTTPURLResponse) {
+        jsonResponse(
+            """
+            {
+                "total_databases": 1,
+                "databases": [{
+                    "name": "\(databaseName)",
+                    "document_count": 1,
+                    "size_bytes": 512,
+                    "size_description": "512 B"
+                }]
+            }
+            """,
+            url: url
+        )
     }
 }

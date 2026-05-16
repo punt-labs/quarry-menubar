@@ -69,7 +69,7 @@ struct ContentPanel: View {
     }
 
     private var configurationHint: String {
-        switch connectionManager.profile?.origin {
+        switch connectionManager.profile?.origin ?? connectionManager.failureOrigin {
         case .proxyConfig:
             "Fix `~/.punt-labs/mcp-proxy/quarry.toml`, or run `quarry logout` if you want the app to return to local Quarry."
         case .localDefault,
@@ -190,6 +190,7 @@ struct ContentPanel: View {
                 Task { await connectionManager.refresh() }
             }
             .buttonStyle(.plain)
+            .disabled(connectionManager.state == .connecting)
             Spacer()
             Button("Quit") {
                 NSApplication.shared.terminate(nil)

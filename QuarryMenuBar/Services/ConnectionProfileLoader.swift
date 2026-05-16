@@ -34,6 +34,19 @@ enum ConnectionProfileLoaderError: LocalizedError {
             "Local Quarry CA certificate not found at \(url.path)."
         }
     }
+
+    var connectionOrigin: ConnectionOrigin {
+        switch self {
+        case .malformedProxyConfig,
+             .missingProxyURL,
+             .invalidProxyURL,
+             .missingPinnedCACertificate,
+             .invalidAuthorizationHeader:
+            .proxyConfig
+        case .missingLocalCACertificate:
+            .localDefault
+        }
+    }
 }
 
 // MARK: - ConnectionProfileLoader
@@ -66,8 +79,9 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         .appendingPathComponent("ca.crt")
 
     func load() throws -> ConnectionProfile {
-        if fileManager.fileExists(atPath: proxyConfigURL.path) {
-            return try loadProxyConfigProfile()
+        if fileManager.fileExists(atPath: proxyConfigURL.path),
+           let profile = try loadProxyConfigProfile() {
+            return profile
         }
         return try loadDefaultLocalProfile()
     }
@@ -81,6 +95,7 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
     }
 
     private struct ProxyConfig {
+        var containsQuarrySection = false
         var url: String?
         var caCertPath: String?
         var authorizationHeader: String?
@@ -90,7 +105,7 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
     private let proxyConfigURL: URL
     private let localCAURL: URL
 
-    private func loadProxyConfigProfile() throws -> ConnectionProfile {
+    private func loadProxyConfigProfile() throws -> ConnectionProfile? {
         let contents: String
         do {
             contents = try String(contentsOf: proxyConfigURL, encoding: .utf8)
@@ -102,6 +117,9 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         }
 
         let config = try parseProxyConfig(contents)
+        guard config.containsQuarrySection else {
+            return nil
+        }
         guard let urlString = config.url else {
             throw ConnectionProfileLoaderError.missingProxyURL(proxyConfigURL)
         }
@@ -130,7 +148,7 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         var baseComponents = URLComponents()
         baseComponents.scheme = baseScheme
         baseComponents.host = host
-        baseComponents.port = components.port
+        baseComponents.port = components.port ?? 8420
 
         guard let baseURL = baseComponents.url else {
             throw ConnectionProfileLoaderError.invalidProxyURL(urlString)
@@ -177,10 +195,12 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
 
             if line == "[quarry]" {
                 section = .quarry
+                config.containsQuarrySection = true
                 continue
             }
             if line == "[quarry.headers]" {
                 section = .quarryHeaders
+                config.containsQuarrySection = true
                 continue
             }
             if line.hasPrefix("[") {

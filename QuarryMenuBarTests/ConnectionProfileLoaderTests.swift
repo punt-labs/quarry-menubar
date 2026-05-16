@@ -70,6 +70,49 @@ final class ConnectionProfileLoaderTests: XCTestCase {
         XCTAssertEqual(profile.hostDisplayName, "okinos.user.home.lab")
     }
 
+    func testProxyConfigWithoutQuarrySectionFallsBackToLocalProfile() throws {
+        let tempDirectory = try XCTUnwrap(tempDirectory)
+        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+        let localCA = tempDirectory.appendingPathComponent("ca.crt")
+        try "pem".write(to: localCA, atomically: true, encoding: .utf8)
+        try """
+        [other]
+        foo = "bar"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: localCA
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.mode, .local)
+        XCTAssertEqual(profile.origin, .localDefault)
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://localhost:8420")
+    }
+
+    func testProxyConfigDefaultsMissingPortToQuarryPort() throws {
+        let tempDirectory = try XCTUnwrap(tempDirectory)
+        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
+        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
+        try """
+        [quarry]
+        url = "wss://okinos.user.home.lab/mcp"
+        ca_cert = "\(pinnedCA.path)"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://okinos.user.home.lab:8420")
+    }
+
     func testProxyConfigRejectsSecureURLWithoutPinnedCA() throws {
         let tempDirectory = try XCTUnwrap(tempDirectory)
         let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")

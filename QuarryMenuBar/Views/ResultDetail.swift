@@ -1,6 +1,15 @@
 import HighlightSwift
 import SwiftUI
 
+// MARK: - ResultDetailContent
+
+struct ResultDetailContent: Equatable {
+    let text: String
+    let warningMessage: String?
+}
+
+// MARK: - ResultDetail
+
 struct ResultDetail: View {
 
     // MARK: Internal
@@ -16,6 +25,11 @@ struct ResultDetail: View {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 Divider()
+                if let detailWarningMessage {
+                    Label(detailWarningMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 if let output = highlightOutput {
                     if isCode {
                         ScrollView(.horizontal, showsIndicators: true) {
@@ -42,24 +56,46 @@ struct ResultDetail: View {
         }
         .task(id: taskID) {
             highlightOutput = nil
-            let displayText = await resolvedDetailText()
+            detailWarningMessage = nil
+            let detailContent = await Self.loadContent(result: result, client: client)
             guard !Task.isCancelled else { return }
             let fontSize: CGFloat = isCode ? 11 : 13
             let newOutput = await SyntaxHighlighter.highlight(
-                displayText,
+                detailContent.text,
                 format: result.sourceFormat,
                 fontSize: fontSize,
                 theme: resolvedTheme,
                 lightMode: colorScheme == .light
             )
             guard !Task.isCancelled else { return }
+            detailWarningMessage = detailContent.warningMessage
             highlightOutput = newOutput
+        }
+    }
+
+    static func loadContent(
+        result: SearchResult,
+        client: QuarryClient
+    ) async -> ResultDetailContent {
+        do {
+            let response = try await client.show(
+                document: result.documentName,
+                page: result.pageNumber,
+                collection: result.collection
+            )
+            return ResultDetailContent(text: response.text, warningMessage: nil)
+        } catch {
+            return ResultDetailContent(
+                text: result.text,
+                warningMessage: fallbackMessage(for: error)
+            )
         }
     }
 
     // MARK: Private
 
     @State private var highlightOutput: SyntaxHighlighter.Output?
+    @State private var detailWarningMessage: String?
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("syntaxTheme") private var themeName: String = "xcode"
 
@@ -97,17 +133,12 @@ struct ResultDetail: View {
         }
     }
 
-    private func resolvedDetailText() async -> String {
-        do {
-            let response = try await client.show(
-                document: result.documentName,
-                page: result.pageNumber,
-                collection: result.collection
-            )
-            return response.text
-        } catch {
-            return result.text
+    private static func fallbackMessage(for error: Error) -> String {
+        if let clientError = error as? QuarryClientError,
+           let description = clientError.errorDescription {
+            return "\(description) Showing the search excerpt instead."
         }
+        return "Could not load the full page from Quarry. Showing the search excerpt instead."
     }
 
     private func revealInFinder() async {
