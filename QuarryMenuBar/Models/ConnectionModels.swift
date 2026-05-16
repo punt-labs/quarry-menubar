@@ -17,18 +17,6 @@ enum ConnectionOrigin: String, Equatable, Sendable {
 // MARK: - ConnectionProfile
 
 struct ConnectionProfile: Equatable, Sendable {
-
-    // MARK: - Test Support
-
-    static let previewLocal = ConnectionProfile(
-        mode: .local,
-        origin: .localDefault,
-        baseURL: URL(string: "http://127.0.0.1:8420") ?? URL(fileURLWithPath: "/"),
-        caCertificateURL: nil,
-        authToken: nil,
-        hostDisplayName: "localhost"
-    )
-
     let mode: ConnectionMode
     let origin: ConnectionOrigin
     let baseURL: URL

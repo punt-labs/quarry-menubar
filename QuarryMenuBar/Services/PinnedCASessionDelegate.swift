@@ -34,6 +34,8 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         case invalidFormat
     }
 
+    private static let serverAuthenticationOID = Data([0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01])
+
     private let certificate: SecCertificate
 
     private static func makeCertificate(from certificateData: Data) throws -> SecCertificate {
@@ -83,16 +85,21 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
             return
         }
 
+        guard let leafCertificate = leafCertificate(from: serverTrust) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
         SecTrustSetAnchorCertificates(serverTrust, [certificate] as CFArray)
         SecTrustSetAnchorCertificatesOnly(serverTrust, true)
+        // Use the pinned CA for chain validation, then restore TLS-specific checks
+        // ourselves so private Quarry certs still validate on macOS.
         SecTrustSetPolicies(serverTrust, SecPolicyCreateBasicX509())
 
         var error: CFError?
         guard SecTrustEvaluateWithError(serverTrust, &error),
-              hostMatchesCertificate(
-                  challenge.protectionSpace.host,
-                  serverTrust: serverTrust
-              )
+              hostMatchesCertificate(challenge.protectionSpace.host, certificate: leafCertificate),
+              allowsServerAuthentication(for: leafCertificate)
         else {
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
@@ -103,12 +110,8 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
 
     private func hostMatchesCertificate(
         _ host: String,
-        serverTrust: SecTrust
+        certificate leafCertificate: SecCertificate
     ) -> Bool {
-        guard let leafCertificate = (SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate])?.first else {
-            return false
-        }
-
         let alternativeNames = subjectAlternativeNames(for: leafCertificate)
         if !alternativeNames.isEmpty {
             return alternativeNames.contains { matches(host: host, pattern: $0) }
@@ -159,6 +162,28 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
 
         let names = commonNameDictionary[kSecPropertyKeyValue] as? [String]
         return names?.first
+    }
+
+    private func allowsServerAuthentication(for certificate: SecCertificate) -> Bool {
+        guard let values = SecCertificateCopyValues(
+            certificate,
+            [kSecOIDExtendedKeyUsage] as CFArray,
+            nil
+        ) as? [CFString: Any],
+            let extendedUsageDictionary = values[kSecOIDExtendedKeyUsage] as? [CFString: Any]
+        else {
+            return false
+        }
+
+        guard let extendedUsages = extendedUsageDictionary[kSecPropertyKeyValue] as? [Data] else {
+            return false
+        }
+
+        return extendedUsages.contains(Self.serverAuthenticationOID)
+    }
+
+    private func leafCertificate(from serverTrust: SecTrust) -> SecCertificate? {
+        (SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate])?.first
     }
 
     private func matches(
