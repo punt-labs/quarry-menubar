@@ -19,22 +19,9 @@ final class MockURLProtocol: URLProtocol {
 
     override func startLoading() {
         guard let handler = MockURLProtocol.requestHandler else {
-            let fallbackURL = request.url ?? defaultTestURL
-            guard let response = HTTPURLResponse(
-                url: fallbackURL,
-                statusCode: 500,
-                httpVersion: nil,
-                headerFields: nil
-            ) else {
-                preconditionFailure("Failed to create fallback response for \(fallbackURL)")
-            }
-
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(
-                self,
-                didLoad: Data(#"{"error":"No request handler set"}"#.utf8)
-            )
-            client?.urlProtocolDidFinishLoading(self)
+            let requestURL = request.url?.absoluteString ?? "unknown request"
+            XCTFail("No request handler set for \(requestURL)")
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
         }
         do {

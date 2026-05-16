@@ -119,6 +119,24 @@ final class SearchViewModelTests: XCTestCase {
         XCTAssertEqual(queryDict["collection"], "research")
     }
 
+    func testExplicitSearchCancelsPendingDebounce() async throws {
+        let client = try mockClient()
+
+        var requestCount = 0
+        MockURLProtocol.requestHandler = { _ in
+            requestCount += 1
+            return jsonResponse(#"{"query":"test","total_results":0,"results":[]}"#)
+        }
+
+        let viewModel = SearchViewModel(client: client)
+        viewModel.query = "test"
+        viewModel.search()
+
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(requestCount, 1)
+    }
+
     // MARK: Private
 
     private func makeViewModel() throws -> SearchViewModel {

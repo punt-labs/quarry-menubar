@@ -139,6 +139,31 @@ final class ConnectionManagerTests: XCTestCase {
         XCTAssertFalse(manager.allowsLocalFileAccess)
     }
 
+    func testRefreshMapsTLSFailureToMisconfigured() async throws {
+        let profile = try testProfile(
+            baseURL: XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420")),
+            mode: .remote,
+            origin: .proxyConfig,
+            hostDisplayName: "okinos.user.home.lab"
+        )
+        let manager = ConnectionManager(
+            profileLoader: StubProfileLoader { profile },
+            clientFactory: { _ in
+                throw QuarryClientError.tlsValidationFailed("hostname mismatch")
+            }
+        )
+
+        await manager.refresh()
+
+        guard case let .misconfigured(message) = manager.state else {
+            XCTFail("Expected misconfigured state, got \(manager.state)")
+            return
+        }
+        XCTAssertTrue(message.contains("TLS validation failed"))
+        XCTAssertEqual(manager.profile, profile)
+        XCTAssertEqual(manager.failureOrigin, .proxyConfig)
+    }
+
     func testRefreshPreservesProxyFailureOriginForHints() async {
         let proxyConfigURL = FileManager.default.temporaryDirectory.appendingPathComponent("quarry.toml")
         let manager = ConnectionManager(

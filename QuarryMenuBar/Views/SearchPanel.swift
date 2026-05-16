@@ -211,6 +211,15 @@ struct SearchPanel: View {
             }
             .buttonStyle(.plain)
             Spacer()
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(result.text, forType: .string)
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+                    .font(.subheadline)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

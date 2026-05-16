@@ -3,23 +3,37 @@ import XCTest
 
 @MainActor
 final class ErrorStateViewTests: XCTestCase {
-    func testErrorStateViewWithHintBuildsBody() {
+    func testErrorStateViewStoresDisplayConfigurationAndRetryAction() {
+        var didRetry = false
         let view = ErrorStateView(
             title: "Quarry Configuration",
             message: "Pinned CA certificate not found.",
             hint: "Run quarry login again.",
             retryLabel: "Reload Config"
-        ) {}
-        XCTAssertNotNil(view.body)
+        ) {
+            didRetry = true
+        }
+
+        XCTAssertEqual(view.title, "Quarry Configuration")
+        XCTAssertEqual(view.message, "Pinned CA certificate not found.")
+        XCTAssertEqual(view.hint, "Run quarry login again.")
+        XCTAssertEqual(view.retryLabel, "Reload Config")
+
+        view.onRetry()
+        XCTAssertTrue(didRetry)
     }
 
-    func testErrorStateViewWithoutHintBuildsBody() {
+    func testErrorStateViewSupportsNilHint() {
         let view = ErrorStateView(
             title: "Quarry Unavailable",
             message: "Could not reach Quarry.",
             hint: nil,
             retryLabel: "Retry"
         ) {}
-        XCTAssertNotNil(view.body)
+
+        XCTAssertEqual(view.title, "Quarry Unavailable")
+        XCTAssertEqual(view.message, "Could not reach Quarry.")
+        XCTAssertNil(view.hint)
+        XCTAssertEqual(view.retryLabel, "Retry")
     }
 }

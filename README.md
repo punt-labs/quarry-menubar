@@ -35,7 +35,8 @@ quarry ingest ~/Documents/my-notes.md
 For remote Quarry:
 
 ```bash
-quarry login <host>
+quarry login <host> --api-key <token>
+# or set QUARRY_API_KEY before running: quarry login <host>
 ```
 
 ## Development

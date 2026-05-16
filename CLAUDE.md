@@ -403,12 +403,12 @@ Work is NOT complete until `git push` succeeds.
 make run    # Build and launch the app
 ```
 
-The app follows Quarry's active connection. For local testing, install Quarry and start the service. For remote testing, point Quarry at a remote server with `quarry login <host>`.
+The app follows Quarry's active connection. For local testing, install Quarry and start the service. For remote testing, point Quarry at a remote server with `quarry login <host> --api-key <token>`, or set `QUARRY_API_KEY` before running `quarry login <host>`.
 
 **Prerequisite**: `quarry` must be installed and configured. Install from the parent project:
 
 ```bash
-cd ../ocr && uv tool install --force .
+cd ../quarry && uv tool install --force .
 ```
 
 ## Ethos & Delegation

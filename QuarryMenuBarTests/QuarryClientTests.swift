@@ -296,6 +296,10 @@ final class QuarryClientNetworkTests: XCTestCase {
         }
     }
 
+    func testTLSValidationFailuresAreConfigurationIssues() {
+        XCTAssertTrue(QuarryClientError.tlsValidationFailed("bad certificate").isConfigurationIssue)
+    }
+
     func testSecureProfileWithoutCACertificateThrows() throws {
         let baseURL = try XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420"))
         let profile = testProfile(
@@ -312,6 +316,38 @@ final class QuarryClientNetworkTests: XCTestCase {
                 return
             }
             XCTAssertTrue(path.contains("missing-ca.crt"))
+        }
+    }
+
+    func testSecureProfileWithInvalidCACertificateThrows() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        defer {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+        }
+
+        let invalidCA = temporaryDirectory.appendingPathComponent("invalid-ca.crt")
+        try "not a certificate".write(to: invalidCA, atomically: true, encoding: .utf8)
+
+        let baseURL = try XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420"))
+        let profile = testProfile(
+            baseURL: baseURL,
+            mode: .remote,
+            origin: .proxyConfig,
+            caCertificateURL: invalidCA,
+            hostDisplayName: "okinos.user.home.lab"
+        )
+
+        XCTAssertThrowsError(try QuarryClient(profile: profile)) { error in
+            guard case let QuarryClientError.invalidCACertificate(path) = error else {
+                XCTFail("Expected invalidCACertificate, got \(error)")
+                return
+            }
+            XCTAssertTrue(path.contains("invalid-ca.crt"))
         }
     }
 

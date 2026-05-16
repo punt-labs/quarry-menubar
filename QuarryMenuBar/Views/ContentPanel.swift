@@ -24,6 +24,26 @@ struct ContentPanel: View {
         }
     }
 
+    static func unavailableHint(for mode: ConnectionMode?) -> String {
+        switch mode {
+        case .remote:
+            "Check that the remote Quarry server is reachable and that its pinned CA and token are still valid."
+        case .local,
+             .none:
+            "Run `quarry install` to set up local Quarry, or run `quarry login <host> --api-key <token>` to point Quarry at a remote server. You can also set `QUARRY_API_KEY` before running `quarry login <host>`."
+        }
+    }
+
+    static func configurationHint(for origin: ConnectionOrigin?) -> String {
+        switch origin {
+        case .proxyConfig:
+            "Fix `~/.punt-labs/mcp-proxy/quarry.toml`, rerun `quarry login <host> --api-key <token>` (or set `QUARRY_API_KEY` first), or run `quarry logout` if you want the app to return to local Quarry."
+        case .localDefault,
+             .none:
+            "Run `quarry install` to create the local TLS certificates and daemon, or run `quarry login <host> --api-key <token>` to use a remote server. You can also set `QUARRY_API_KEY` before running `quarry login <host>`."
+        }
+    }
+
     // MARK: Private
 
     /// A curated theme entry for the picker.
@@ -59,23 +79,13 @@ struct ContentPanel: View {
     }
 
     private var unavailableHint: String {
-        switch connectionManager.profile?.mode {
-        case .remote:
-            "Check that the remote Quarry server is reachable and that its pinned CA and token are still valid."
-        case .local,
-             .none:
-            "Run `quarry install` to set up local Quarry, or `quarry login <host>` to point Quarry at a remote server."
-        }
+        Self.unavailableHint(for: connectionManager.profile?.mode)
     }
 
     private var configurationHint: String {
-        switch connectionManager.profile?.origin ?? connectionManager.failureOrigin {
-        case .proxyConfig:
-            "Fix `~/.punt-labs/mcp-proxy/quarry.toml`, or run `quarry logout` if you want the app to return to local Quarry."
-        case .localDefault,
-             .none:
-            "Run `quarry install` to create the local TLS certificates and daemon, or `quarry login <host>` to use a remote server."
-        }
+        Self.configurationHint(
+            for: connectionManager.profile?.origin ?? connectionManager.failureOrigin
+        )
     }
 
     private var header: some View {

@@ -43,11 +43,11 @@ enum QuarryClientError: LocalizedError {
         case .invalidBaseURL,
              .missingCACertificate,
              .invalidCACertificate,
-             .unauthorized:
+             .unauthorized,
+             .tlsValidationFailed:
             true
         case .httpError,
              .unreachable,
-             .tlsValidationFailed,
              .networkError,
              .decodingError:
             false
