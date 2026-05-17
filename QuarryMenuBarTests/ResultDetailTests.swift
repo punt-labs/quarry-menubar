@@ -109,7 +109,61 @@ final class ResultDetailTests: XCTestCase {
         """
 
         XCTAssertEqual(
-            ExtractedTextFormatter.formatDetailText(text, sourceFormat: ".md"),
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".md",
+                pageType: "text"
+            ),
+            text
+        )
+    }
+
+    func testShouldReflowDetailTextMatchesQuarryRepresentationPolicy() {
+        XCTAssertTrue(
+            ExtractedTextFormatter.shouldReflowDetailText(
+                sourceFormat: ".pdf",
+                pageType: "text"
+            )
+        )
+        XCTAssertFalse(
+            ExtractedTextFormatter.shouldReflowDetailText(
+                sourceFormat: ".py",
+                pageType: "code"
+            )
+        )
+        XCTAssertFalse(
+            ExtractedTextFormatter.shouldReflowDetailText(
+                sourceFormat: ".md",
+                pageType: "text"
+            )
+        )
+        XCTAssertFalse(
+            ExtractedTextFormatter.shouldReflowDetailText(
+                sourceFormat: ".csv",
+                pageType: "spreadsheet"
+            )
+        )
+        XCTAssertFalse(
+            ExtractedTextFormatter.shouldReflowDetailText(
+                sourceFormat: ".pptx",
+                pageType: "presentation"
+            )
+        )
+    }
+
+    func testFormatDetailTextLeavesQuarryCodePagesUnchanged() {
+        let text = """
+        def example():
+            return "still wrapped
+        exactly as-authored"
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".py",
+                pageType: "code"
+            ),
             text
         )
     }
@@ -121,7 +175,11 @@ final class ResultDetailTests: XCTestCase {
         """
 
         XCTAssertEqual(
-            ExtractedTextFormatter.formatDetailText(text, sourceFormat: ".pdf"),
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
             "This becomes inasmuch easier to read."
         )
     }

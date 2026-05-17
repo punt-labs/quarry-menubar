@@ -6,15 +6,30 @@ enum ExtractedTextFormatter {
 
     static func formatDetailText(
         _ text: String,
-        sourceFormat: String
+        sourceFormat: String,
+        pageType: String
     ) -> String {
-        guard sourceFormat.caseInsensitiveCompare(".pdf") == .orderedSame else {
+        guard shouldReflowDetailText(sourceFormat: sourceFormat, pageType: pageType) else {
             return text
         }
 
         let normalized = normalizeLineEndings(in: text)
         let reflowed = reflowParagraphs(in: normalized)
         return reflowed.isEmpty ? normalized : reflowed
+    }
+
+    static func shouldReflowDetailText(
+        sourceFormat: String,
+        pageType: String
+    ) -> Bool {
+        let normalizedPageType = pageType.trimmingCharacters(in: whitespace).lowercased()
+        if normalizedPageType == "code"
+            || normalizedPageType == "spreadsheet"
+            || normalizedPageType == "presentation" {
+            return false
+        }
+
+        return sourceFormat.caseInsensitiveCompare(".pdf") == .orderedSame
     }
 
     // MARK: Private
