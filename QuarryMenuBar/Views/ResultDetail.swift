@@ -45,7 +45,7 @@ struct ResultDetail: View {
                     } else {
                         Text(output.text)
                             .textSelection(.enabled)
-                            .lineSpacing(4)
+                            .lineSpacing(6)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
@@ -62,7 +62,7 @@ struct ResultDetail: View {
             detailWarningMessage = nil
             let detailContent = await Self.loadContent(result: result, client: client)
             guard !Task.isCancelled else { return }
-            let fontSize: CGFloat = isCode ? 11 : 13
+            let fontSize: CGFloat = isCode ? 11 : 14
             let newOutput = await SyntaxHighlighter.highlight(
                 detailContent.text,
                 format: result.sourceFormat,

@@ -56,6 +56,7 @@ enum ExtractedTextFormatter {
 
     private static func reflowParagraphs(in text: String) -> String {
         let lines = stripLeadingPageChrome(from: text.components(separatedBy: "\n"))
+        let typicalLineLength = medianNonPreservedLineLength(in: lines)
         var output: [String] = []
         var paragraphLines: [String] = []
 
@@ -70,7 +71,7 @@ enum ExtractedTextFormatter {
 
             if trimmed.isEmpty {
                 flushParagraph()
-                if output.last?.isEmpty != true {
+                if !output.isEmpty, output.last?.isEmpty != true {
                     output.append("")
                 }
                 continue
@@ -78,8 +79,23 @@ enum ExtractedTextFormatter {
 
             if shouldPreserveLine(raw: rawLine, trimmed: trimmed) {
                 flushParagraph()
+                if !output.isEmpty, output.last?.isEmpty != true {
+                    output.append("")
+                }
                 output.append(trimmed)
                 continue
+            }
+
+            if let previousLine = paragraphLines.last,
+               shouldStartNewParagraph(
+                   after: previousLine,
+                   before: trimmed,
+                   typicalLineLength: typicalLineLength
+               ) {
+                flushParagraph()
+                if !output.isEmpty, output.last?.isEmpty != true {
+                    output.append("")
+                }
             }
 
             paragraphLines.append(trimmed)
@@ -92,6 +108,19 @@ enum ExtractedTextFormatter {
         }
 
         return output.joined(separator: "\n")
+    }
+
+    private static func medianNonPreservedLineLength(in lines: [String]) -> Int {
+        let lengths = lines
+            .map { raw in (raw, raw.trimmingCharacters(in: whitespace)) }
+            .filter { raw, trimmed in
+                !trimmed.isEmpty && !shouldPreserveLine(raw: raw, trimmed: trimmed)
+            }
+            .map { _, trimmed in trimmed.count }
+            .sorted()
+
+        guard !lengths.isEmpty else { return 0 }
+        return lengths[lengths.count / 2]
     }
 
     private static func shouldPreserveLine(
@@ -138,6 +167,22 @@ enum ExtractedTextFormatter {
 
     private static func isStandalonePageNumber(_ line: String) -> Bool {
         !line.isEmpty && line.count <= 4 && line.allSatisfy(\.isNumber)
+    }
+
+    private static func shouldStartNewParagraph(
+        after previousLine: String,
+        before currentLine: String,
+        typicalLineLength: Int
+    ) -> Bool {
+        guard typicalLineLength >= 40 else { return false }
+        guard previousLine.count < Int(Double(typicalLineLength) * 0.72) else { return false }
+        guard previousLine.last.map(isParagraphTerminal) == true else { return false }
+        guard currentLine.first?.isUppercase == true else { return false }
+        return true
+    }
+
+    private static func isParagraphTerminal(_ character: Character) -> Bool {
+        ".!?)]\"'".contains(character)
     }
 
     private static func isListItem(_ line: String) -> Bool {

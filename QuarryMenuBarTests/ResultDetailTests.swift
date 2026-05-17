@@ -106,10 +106,48 @@ final class ResultDetailTests: XCTestCase {
             content.text,
             """
             Why It Matters
+
             ■ Base relvars
             "really exist" in the sense that they represent data physically stored.
+
             ■ Views
             provide different ways of looking at the real data.
+            """
+        )
+    }
+
+    func testLoadContentRestoresLikelyPDFParagraphBreaks() async throws {
+        let result = makeResult(sourceFormat: ".pdf")
+        let client = try mockClient()
+
+        MockURLProtocol.requestHandler = { request in
+            let requestURL = try XCTUnwrap(request.url)
+            switch requestURL.path {
+            case "/show":
+                return jsonResponse(
+                    """
+                    {
+                        "document_name": "README.md",
+                        "page_number": 3,
+                        "text": "This is the first long extracted line that wraps in the source PDF but belongs to a single paragraph for the reader.\\nThis is the second long extracted line that should still be joined into that same paragraph for readability.\\nThis is the third long extracted line that keeps the page's typical line length high for the heuristic.\\nShort ending line only.\\nThere is one final point that should begin a new paragraph because the prior extracted line was unusually short."
+                    }
+                    """,
+                    url: requestURL
+                )
+            default:
+                XCTFail("Unexpected request: \(requestURL.absoluteString)")
+                return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
+            }
+        }
+
+        let content = await ResultDetail.loadContent(result: result, client: client)
+
+        XCTAssertEqual(
+            content.text,
+            """
+            This is the first long extracted line that wraps in the source PDF but belongs to a single paragraph for the reader. This is the second long extracted line that should still be joined into that same paragraph for readability. This is the third long extracted line that keeps the page's typical line length high for the heuristic. Short ending line only.
+
+            There is one final point that should begin a new paragraph because the prior extracted line was unusually short.
             """
         )
     }
