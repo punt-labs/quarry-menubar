@@ -45,6 +45,8 @@ struct ResultDetail: View {
                     } else {
                         Text(output.text)
                             .textSelection(.enabled)
+                            .lineSpacing(4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
                     ProgressView()

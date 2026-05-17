@@ -1,3 +1,4 @@
+import AppKit
 import HighlightSwift
 @testable import QuarryMenuBar
 import XCTest
@@ -106,6 +107,21 @@ final class SyntaxHighlighterTests: XCTestCase {
         let md = "Use `foo` here"
         let output = await SyntaxHighlighter.highlight(md, format: ".md")
         XCTAssertEqual(String(output.text.characters), "Use foo here")
+    }
+
+    func testMarkdownInlineCodeUsesReadableNeutralStyling() async {
+        let md = "Use `foo` here"
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+        let attributed = NSAttributedString(output.text)
+        let range = (attributed.string as NSString).range(of: "foo")
+
+        let foreground = attributed.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor
+        let background = attributed.attribute(.backgroundColor, at: range.location, effectiveRange: nil) as? NSColor
+        let font = attributed.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont
+
+        XCTAssertEqual(foreground, NSColor.labelColor)
+        XCTAssertNotNil(background)
+        XCTAssertEqual(font?.fontDescriptor.symbolicTraits.contains(.monoSpace), true)
     }
 
     func testMarkdownStripsBold() async {

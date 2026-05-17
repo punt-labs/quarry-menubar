@@ -40,6 +40,10 @@ enum ExtractedTextFormatter {
         "- ",
         "* ",
         "• ",
+        "■ ",
+        "▪ ",
+        "● ",
+        "○ ",
         "o ",
         "· "
     ]
@@ -51,7 +55,7 @@ enum ExtractedTextFormatter {
     }
 
     private static func reflowParagraphs(in text: String) -> String {
-        let lines = text.components(separatedBy: "\n")
+        let lines = stripLeadingPageChrome(from: text.components(separatedBy: "\n"))
         var output: [String] = []
         var paragraphLines: [String] = []
 
@@ -111,6 +115,25 @@ enum ExtractedTextFormatter {
         }
 
         return false
+    }
+
+    private static func stripLeadingPageChrome(from lines: [String]) -> [String] {
+        var result = lines
+        let nonEmptyIndices = result.indices.filter { !result[$0].trimmingCharacters(in: whitespace).isEmpty }
+
+        guard nonEmptyIndices.count >= 2 else { return result }
+
+        let headingIndex = nonEmptyIndices[0]
+        let pageNumberIndex = nonEmptyIndices[1]
+        let heading = result[headingIndex].trimmingCharacters(in: whitespace)
+        let pageNumber = result[pageNumberIndex].trimmingCharacters(in: whitespace)
+
+        guard isLikelyHeading(heading), isStandalonePageNumber(pageNumber) else {
+            return result
+        }
+
+        result.remove(at: pageNumberIndex)
+        return result
     }
 
     private static func isStandalonePageNumber(_ line: String) -> Bool {

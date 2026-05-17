@@ -70,11 +70,48 @@ final class ResultDetailTests: XCTestCase {
             content.text,
             """
             Chapter 3 / An Introduction to Relational Databases
-            75
             could be relational, while a given user could have an external view that was hierarchic. In practice, however, most systems use the same type of structure as the basis for both levels, and relational products are no exception to this general rule---views are still relvars, just like the base relvars are. And since the same type of object is supported at both levels, the
             """
         )
         XCTAssertNil(content.warningMessage)
+    }
+
+    func testLoadContentPreservesPDFBulletLines() async throws {
+        let result = makeResult(sourceFormat: ".pdf")
+        let client = try mockClient()
+
+        MockURLProtocol.requestHandler = { request in
+            let requestURL = try XCTUnwrap(request.url)
+            switch requestURL.path {
+            case "/show":
+                return jsonResponse(
+                    """
+                    {
+                        "document_name": "README.md",
+                        "page_number": 3,
+                        "text": "Why It Matters\\n■ Base relvars\\n\\\"really exist\\\" in the sense that they represent data physically stored.\\n■ Views\\nprovide different ways of looking at the real data."
+                    }
+                    """,
+                    url: requestURL
+                )
+            default:
+                XCTFail("Unexpected request: \(requestURL.absoluteString)")
+                return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
+            }
+        }
+
+        let content = await ResultDetail.loadContent(result: result, client: client)
+
+        XCTAssertEqual(
+            content.text,
+            """
+            Why It Matters
+            ■ Base relvars
+            "really exist" in the sense that they represent data physically stored.
+            ■ Views
+            provide different ways of looking at the real data.
+            """
+        )
     }
 
     func testLoadContentSurfacesFallbackWarningWhenShowFails() async throws {

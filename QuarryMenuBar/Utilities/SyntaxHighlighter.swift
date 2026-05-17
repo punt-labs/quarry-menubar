@@ -121,6 +121,7 @@ enum SyntaxHighlighter {
         let baseFont = NSFont.systemFont(ofSize: fontSize)
         let boldFont = NSFont.boldSystemFont(ofSize: fontSize)
         let monoFont = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let inlineCodeBackground = NSColor.tertiaryLabelColor.withAlphaComponent(0.16)
         let result = NSMutableAttributedString()
         let lines = text.components(separatedBy: "\n")
 
@@ -145,7 +146,12 @@ enum SyntaxHighlighter {
             lineAttr.addAttribute(.font, value: lineFont, range: fullRange)
             lineAttr.addAttribute(.foregroundColor, value: lineColor, range: fullRange)
 
-            applyInlineTransforms(to: lineAttr, monoFont: monoFont, boldFont: boldFont)
+            applyInlineTransforms(
+                to: lineAttr,
+                monoFont: monoFont,
+                boldFont: boldFont,
+                inlineCodeBackground: inlineCodeBackground
+            )
 
             result.append(lineAttr)
             if index < lines.count - 1 {
@@ -161,7 +167,8 @@ enum SyntaxHighlighter {
     private static func applyInlineTransforms(
         to attr: NSMutableAttributedString,
         monoFont: NSFont,
-        boldFont: NSFont
+        boldFont: NSFont,
+        inlineCodeBackground: NSColor
     ) {
         let text = attr.string
         let fullRange = NSRange(location: 0, length: attr.length)
@@ -173,7 +180,11 @@ enum SyntaxHighlighter {
                 let content = (text as NSString).substring(with: match.range(at: 1))
                 transforms.append(InlineTransform(
                     range: match.range, replacement: content,
-                    attributes: [.font: monoFont, .foregroundColor: NSColor.systemTeal]
+                    attributes: [
+                        .font: monoFont,
+                        .foregroundColor: NSColor.labelColor,
+                        .backgroundColor: inlineCodeBackground
+                    ]
                 ))
             }
         }
@@ -195,7 +206,10 @@ enum SyntaxHighlighter {
                 let content = (text as NSString).substring(with: match.range(at: 1))
                 transforms.append(InlineTransform(
                     range: match.range, replacement: content,
-                    attributes: [.foregroundColor: NSColor.systemBlue]
+                    attributes: [
+                        .foregroundColor: NSColor.linkColor,
+                        .underlineStyle: NSUnderlineStyle.single.rawValue
+                    ]
                 ))
             }
         }
