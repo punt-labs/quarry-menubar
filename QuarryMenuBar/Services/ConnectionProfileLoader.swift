@@ -141,8 +141,10 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         }
 
         // `URLComponents.host` surfaces IPv6 literals in bracketed form (`[::1]`). Strip the
-        // brackets so host comparison and display use the bare address.
-        let host = strippingIPv6Brackets(parsedHost)
+        // brackets only for host comparison and display; the value assigned back to
+        // `URLComponents.host` must keep its brackets, or a remote IPv6 literal fails to build.
+        let bareHost = strippingIPv6Brackets(parsedHost)
+        let isLoopback = isLocalHost(bareHost)
 
         let baseScheme: String
         switch scheme {
@@ -159,14 +161,16 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
 
         var baseComponents = URLComponents()
         baseComponents.scheme = baseScheme
-        baseComponents.host = loopbackNormalizedHost(host)
+        // Loopback dials the IPv4 literal directly; every other host (including remote IPv6
+        // literals) keeps the bracketed form Foundation parsed so the URL still builds.
+        baseComponents.host = isLoopback ? "127.0.0.1" : parsedHost
         baseComponents.port = components.port ?? 8420
 
         guard let baseURL = baseComponents.url else {
             throw ConnectionProfileLoaderError.invalidProxyURL(urlString)
         }
 
-        let mode: ConnectionMode = isLocalHost(host) ? .local : .remote
+        let mode: ConnectionMode = isLoopback ? .local : .remote
         if mode == .remote, baseScheme != "https" {
             throw ConnectionProfileLoaderError.insecureRemoteProxyURL(urlString)
         }
@@ -179,7 +183,7 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
             baseURL: baseURL,
             caCertificateURL: caURL,
             authToken: token,
-            hostDisplayName: host
+            hostDisplayName: bareHost
         )
     }
 
@@ -323,20 +327,14 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         return token
     }
 
+    /// Recognizes the canonical loopback host forms the loader normalizes to IPv4.
+    ///
+    /// The allow-list is deliberately narrow: non-canonical loopback spellings such as the expanded
+    /// IPv6 form `0:0:0:0:0:0:0:1`, a zone-scoped `::1%lo0`, or any `127.0.0.0/8` address other than
+    /// `127.0.0.1` are not recognized and fall through to `.remote`. They are not produced by the
+    /// Quarry config writer, so handling them is out of scope for this fix.
     private func isLocalHost(_ host: String) -> Bool {
         ["localhost", "127.0.0.1", "::1"].contains(host.lowercased())
-    }
-
-    /// Rewrites loopback host names to the IPv4 literal `127.0.0.1` for the client base URL.
-    ///
-    /// `localhost` resolves to both `::1` and `127.0.0.1`, with IPv6 preferred. The local Quarry
-    /// server binds IPv4 `127.0.0.1` only, so dialing `localhost` (or `::1`) first attempts `::1`
-    /// and fails with connection-refused. Normalizing to `127.0.0.1` dials the listening socket
-    /// directly. The pinned-CA delegate still validates the host against the cert SAN, which
-    /// includes `IP Address:127.0.0.1`, so host validation continues to pass. Non-loopback
-    /// (remote) hosts are returned unchanged.
-    private func loopbackNormalizedHost(_ host: String) -> String {
-        isLocalHost(host) ? "127.0.0.1" : host
     }
 
     /// Removes the surrounding brackets from an IPv6 host literal (`[::1]` -> `::1`).
