@@ -39,6 +39,8 @@ final class ConnectionProfileLoaderTests: XCTestCase {
         XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
         XCTAssertEqual(profile.caCertificateURL, localCA)
         XCTAssertNil(profile.authToken)
+        // The app dials 127.0.0.1 but still presents the host as "localhost" for the user.
+        XCTAssertEqual(profile.hostDisplayName, "localhost")
     }
 
     func testProxyConfigLoadsRemoteProfileAndAuthHeader() throws {
@@ -249,6 +251,77 @@ final class ConnectionProfileLoaderTests: XCTestCase {
         XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
         XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
         XCTAssertEqual(profile.hostDisplayName, "::1")
+    }
+
+    func testProxyConfigNormalizesUppercaseLocalhostToIPv4() throws {
+        let tempDirectory = try XCTUnwrap(tempDirectory)
+        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
+        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
+        try """
+        [quarry]
+        url = "wss://LOCALHOST:8420/mcp"
+        ca_cert = "\(pinnedCA.path)"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.mode, .local)
+        XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
+        XCTAssertEqual(profile.hostDisplayName, "LOCALHOST")
+    }
+
+    func testProxyConfigNormalizesLocalhostHostButKeepsNonDefaultPort() throws {
+        let tempDirectory = try XCTUnwrap(tempDirectory)
+        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
+        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
+        try """
+        [quarry]
+        url = "wss://localhost:9000/mcp"
+        ca_cert = "\(pinnedCA.path)"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.mode, .local)
+        XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
+        XCTAssertEqual(profile.baseURL.port, 9000)
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:9000")
+    }
+
+    func testProxyConfigKeepsRemoteIPv6LiteralBracketed() throws {
+        let tempDirectory = try XCTUnwrap(tempDirectory)
+        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
+        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
+        try """
+        [quarry]
+        url = "wss://[2001:db8::1]:8420/mcp"
+        ca_cert = "\(pinnedCA.path)"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.mode, .remote)
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://[2001:db8::1]:8420")
+        XCTAssertEqual(profile.hostDisplayName, "2001:db8::1")
     }
 
     func testProxyConfigDoesNotRewriteRemoteHost() throws {
