@@ -134,11 +134,15 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
 
         guard let profileURL = URL(string: urlString),
               let components = URLComponents(url: profileURL, resolvingAgainstBaseURL: false),
-              let host = components.host,
+              let parsedHost = components.host,
               let scheme = components.scheme?.lowercased()
         else {
             throw ConnectionProfileLoaderError.invalidProxyURL(urlString)
         }
+
+        // `URLComponents.host` surfaces IPv6 literals in bracketed form (`[::1]`). Strip the
+        // brackets so host comparison and display use the bare address.
+        let host = strippingIPv6Brackets(parsedHost)
 
         let baseScheme: String
         switch scheme {
@@ -155,7 +159,7 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
 
         var baseComponents = URLComponents()
         baseComponents.scheme = baseScheme
-        baseComponents.host = host
+        baseComponents.host = loopbackNormalizedHost(host)
         baseComponents.port = components.port ?? 8420
 
         guard let baseURL = baseComponents.url else {
@@ -184,8 +188,8 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
             throw ConnectionProfileLoaderError.missingLocalCACertificate(localCAURL)
         }
 
-        guard let baseURL = URL(string: "https://localhost:8420") else {
-            throw ConnectionProfileLoaderError.invalidProxyURL("https://localhost:8420")
+        guard let baseURL = URL(string: "https://127.0.0.1:8420") else {
+            throw ConnectionProfileLoaderError.invalidProxyURL("https://127.0.0.1:8420")
         }
 
         return ConnectionProfile(
@@ -321,5 +325,26 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
 
     private func isLocalHost(_ host: String) -> Bool {
         ["localhost", "127.0.0.1", "::1"].contains(host.lowercased())
+    }
+
+    /// Rewrites loopback host names to the IPv4 literal `127.0.0.1` for the client base URL.
+    ///
+    /// `localhost` resolves to both `::1` and `127.0.0.1`, with IPv6 preferred. The local Quarry
+    /// server binds IPv4 `127.0.0.1` only, so dialing `localhost` (or `::1`) first attempts `::1`
+    /// and fails with connection-refused. Normalizing to `127.0.0.1` dials the listening socket
+    /// directly. The pinned-CA delegate still validates the host against the cert SAN, which
+    /// includes `IP Address:127.0.0.1`, so host validation continues to pass. Non-loopback
+    /// (remote) hosts are returned unchanged.
+    private func loopbackNormalizedHost(_ host: String) -> String {
+        isLocalHost(host) ? "127.0.0.1" : host
+    }
+
+    /// Removes the surrounding brackets from an IPv6 host literal (`[::1]` -> `::1`).
+    ///
+    /// `URLComponents.host` returns IPv6 addresses in bracketed form. Hosts without enclosing
+    /// brackets are returned unchanged.
+    private func strippingIPv6Brackets(_ host: String) -> String {
+        guard host.hasPrefix("["), host.hasSuffix("]"), host.count >= 2 else { return host }
+        return String(host.dropFirst().dropLast())
     }
 }
