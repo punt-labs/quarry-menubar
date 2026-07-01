@@ -244,9 +244,11 @@ final class ResultDetailTests: XCTestCase {
     }
 
     func testFormatDetailTextUnhyphenatesSoftWrappedPDFWords() {
+        // Realistic hard-wrapped prose: long lines so the page is treated as prose and the
+        // soft-wrap de-hyphenation runs. "inas" is a clear fragment, so the hyphen is dropped.
         let text = """
-        This becomes inas-
-        much easier to read.
+        The archaic construction becomes far more legible inas-
+        much as the paragraph is reflowed into continuous readable prose.
         """
 
         XCTAssertEqual(
@@ -255,7 +257,175 @@ final class ResultDetailTests: XCTestCase {
                 sourceFormat: ".pdf",
                 pageType: "text"
             ),
-            "This becomes inasmuch easier to read."
+            "The archaic construction becomes far more legible inasmuch "
+                + "as the paragraph is reflowed into continuous readable prose."
+        )
+    }
+
+    func testFormatDetailTextPreservesHardCompoundHyphen() {
+        // "well" is a hard-compound prefix, so the wrap hyphen is kept: `well-known`, never
+        // the fake word `wellknown`. When uncertain we bias toward preserving the hyphen.
+        let text = """
+        This particular approach is a remarkably well-
+        known technique among database practitioners working today.
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
+            "This particular approach is a remarkably well-known "
+                + "technique among database practitioners working today."
+        )
+    }
+
+    func testFormatDetailTextPreservesYearFollowingHeading() {
+        // A four-digit year is real content, not a running-header page number, so it must
+        // never be stripped even when it follows a heading.
+        let text = """
+        Annual Report
+        2024
+        Revenue increased twelve percent over the prior fiscal year on continued strong demand.
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
+            """
+            Annual Report
+            2024 Revenue increased twelve percent over the prior fiscal year on continued strong demand.
+            """
+        )
+    }
+
+    func testFormatDetailTextStripsFourDigitNonYearPageNumber() {
+        // Documents the residual call: a four-digit value outside the plausible year range
+        // is treated as a large page number and stripped when it follows a heading.
+        let text = """
+        Report Title
+        4021
+        This is body prose long enough to be treated as hard-wrapped prose content for the reader.
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
+            """
+            Report Title
+            This is body prose long enough to be treated as hard-wrapped prose content for the reader.
+            """
+        )
+    }
+
+    func testFormatDetailTextPreservesShortLineVerse() {
+        // Predominantly short lines (verse) are intentional structure — pass through unchanged.
+        let text = """
+        Roses are red,
+        Violets are blue,
+        Sugar is sweet,
+        And so are you.
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
+            text
+        )
+    }
+
+    func testFormatDetailTextPreservesShortLineAddress() {
+        let text = """
+        Jane Doe
+        128 Example Avenue
+        Springfield, IL 62704
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
+            text
+        )
+    }
+
+    func testFormatDetailTextDoesNotSplitTitleCaseWrappedSentence() {
+        // A title-case-heavy wrapped prose line must not be torn out as a spurious heading.
+        let text = """
+        The United States Federal Reserve Board announced
+        that interest rates would remain unchanged through
+        the remainder of the current fiscal year.
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
+            "The United States Federal Reserve Board announced that interest rates "
+                + "would remain unchanged through the remainder of the current fiscal year."
+        )
+    }
+
+    func testFormatDetailTextReturnsEmptyStringUnchanged() {
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText("", sourceFormat: ".pdf", pageType: "text"),
+            ""
+        )
+    }
+
+    func testFormatDetailTextReturnsWhitespaceOnlyInputUnchanged() {
+        let text = "   \n  \t "
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(text, sourceFormat: ".pdf", pageType: "text"),
+            text
+        )
+    }
+
+    func testFormatDetailTextReturnsSingleLineUnchanged() {
+        let text = "This is one already-clean line of prose that needs no reflow at all today."
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(text, sourceFormat: ".pdf", pageType: "text"),
+            text
+        )
+    }
+
+    func testFormatDetailTextIsIdempotentOnCleanProse() {
+        let text = "This is one already-clean line of prose that needs no reflow at all today."
+        let once = ExtractedTextFormatter.formatDetailText(text, sourceFormat: ".pdf", pageType: "text")
+        let twice = ExtractedTextFormatter.formatDetailText(once, sourceFormat: ".pdf", pageType: "text")
+        XCTAssertEqual(once, text)
+        XCTAssertEqual(twice, once)
+    }
+
+    func testFormatDetailTextPreservesExistingBlankLineParagraphBreaks() {
+        // A single blank-line paragraph break is preserved — neither collapsed nor doubled.
+        let text = """
+        This first paragraph is long enough to read as hard-wrapped prose content here.
+
+        This second paragraph is also long enough to read as hard-wrapped prose here.
+        """
+
+        XCTAssertEqual(
+            ExtractedTextFormatter.formatDetailText(
+                text,
+                sourceFormat: ".pdf",
+                pageType: "text"
+            ),
+            text
         )
     }
 
