@@ -23,20 +23,59 @@ The app does **not** manage Quarry itself. It follows Quarry's current connectio
 
 ## Install via Homebrew
 
-```bash
-# First time only: add the tap and trust it. Homebrew requires third-party
-# taps to be trusted before it will install their formulae.
-brew tap punt-labs/homebrew-tap
-brew trust punt-labs/tap
+### Recommended: one command
 
-# Install (and, later, upgrade)
-brew install punt-labs/homebrew-tap/quarry-menubar
+`install.sh` runs the full flow — tap, trust, install/upgrade, and the required
+`~/Applications` symlink — and is idempotent, so re-running it upgrades in
+place. Because the app is unsigned and non-notarized, fetch and review the
+script before running it rather than piping it blindly into a shell:
+
+```bash
+# Fetch, review, then run
+curl -fsSL https://raw.githubusercontent.com/punt-labs/quarry-menubar/main/install.sh -o install.sh
+less install.sh          # review before running
+bash install.sh
 ```
 
-If you skip the trust step, Homebrew refuses with
-`Refusing to load formula ... from untrusted tap`. Trust is a one-time,
-per-tap action; subsequent `brew install`/`brew upgrade` runs need only the
-last command.
+Or clone the repo and run it from there:
+
+```bash
+git clone https://github.com/punt-labs/quarry-menubar.git
+cd quarry-menubar && ./install.sh
+```
+
+### Manual: four steps
+
+1. **Add the tap.**
+
+   ```bash
+   brew tap punt-labs/homebrew-tap
+   ```
+
+2. **Trust the tap.** Homebrew refuses to load formulae from an untrusted
+   third-party tap (`Refusing to load formula ... from untrusted tap`). Trust
+   is a one-time, per-tap action.
+
+   ```bash
+   brew trust punt-labs/tap
+   ```
+
+3. **Install (and, later, upgrade).**
+
+   ```bash
+   brew install punt-labs/homebrew-tap/quarry-menubar
+   ```
+
+4. **Symlink into `~/Applications` (required).** The formula installs the app
+   into the Homebrew prefix but cannot create this symlink itself — Homebrew's
+   install sandbox forbids writes to `$HOME`, so without this step the app
+   never appears in Spotlight or Launchpad.
+
+   ```bash
+   mkdir -p ~/Applications && ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app
+   ```
+
+### Notes
 
 This installs a prebuilt, universal (Apple Silicon + Intel) `QuarryMenuBar.app`
 from the latest GitHub Release. It is a **formula, not a cask**, so Homebrew
@@ -44,15 +83,10 @@ does not quarantine the download: the app is ad-hoc signed but **not
 notarized**, and it still launches with no Gatekeeper prompt and no Developer
 ID certificate. No Xcode or build tools are required.
 
-The formula installs the app into the Homebrew prefix. To make it visible in
-Spotlight and Launchpad, symlink it into `~/Applications`:
-
-```bash
-mkdir -p ~/Applications && ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app
-```
-
-It is a menu bar app - no Dock icon; look for the icon in the menu bar. It
-follows your active Quarry connection (remote profile in
+It is a menu-bar-only app — no Dock icon; look for the icon in the menu bar.
+Launch it with `open -a QuarryMenuBar`, Spotlight, or a double-click in
+`~/Applications` (not by running the `.app` bundle path directly). It follows
+your active Quarry connection (remote profile in
 `~/.punt-labs/mcp-proxy/quarry.toml` if present, otherwise local Quarry at
 `https://127.0.0.1:8420`).
 
