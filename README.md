@@ -57,7 +57,7 @@ cd quarry-menubar && ./install.sh
    is a one-time, per-tap action.
 
    ```bash
-   brew trust punt-labs/tap
+   brew trust punt-labs/homebrew-tap
    ```
 
 3. **Install (and, later, upgrade).**

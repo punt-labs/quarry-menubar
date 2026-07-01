@@ -20,6 +20,9 @@ warn() { printf '  %b!%b %s\n' "$YELLOW" "$NC" "$1"; }
 fail() { printf '  %b✗%b %s\n' "$RED" "$NC" "$1"; exit 1; }
 
 TAP="punt-labs/homebrew-tap"
+# Homebrew displays taps with the `homebrew-` prefix stripped, so `brew tap`
+# prints `punt-labs/tap`. This short form is used ONLY to match `brew tap`
+# output (step 2); every brew command uses the full `$TAP` name.
 TAP_SHORT="punt-labs/tap"
 FORMULA="punt-labs/homebrew-tap/quarry-menubar"
 BINARY="quarry-menubar"
@@ -61,7 +64,7 @@ fi
 
 info "Trusting tap..."
 
-brew trust "$TAP_SHORT" || fail "Failed to trust tap $TAP_SHORT"
+brew trust "$TAP" || fail "Failed to trust tap $TAP"
 ok "tap trusted"
 
 # --- Step 4: Install or upgrade ---
