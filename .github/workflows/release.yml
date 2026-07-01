@@ -134,6 +134,7 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           zip="QuarryMenuBar-v${version}-macos-universal.zip"
           tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
           # Extract with unzip, NOT `ditto -x -k`: ditto merges AppleDouble
           # (._*) entries back into xattrs and would MASK the regression this
           # step guards against (dropping --norsrc/--noextattr/--noacl).
