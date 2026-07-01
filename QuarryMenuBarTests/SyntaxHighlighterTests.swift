@@ -136,6 +136,22 @@ final class SyntaxHighlighterTests: XCTestCase {
         XCTAssertEqual(String(output.text.characters), "Click here now")
     }
 
+    func testMarkdownLinkAppliesUnderlineStyle() async {
+        let md = "Click [here](https://example.com) now"
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+
+        let attributed = NSAttributedString(output.text)
+        let range = (attributed.string as NSString).range(of: "here")
+        XCTAssertNotEqual(range.location, NSNotFound)
+
+        let underline = attributed.attribute(
+            .underlineStyle,
+            at: range.location,
+            effectiveRange: nil
+        ) as? Int
+        XCTAssertEqual(underline, NSUnderlineStyle.single.rawValue)
+    }
+
     func testMarkdownStripsBlockQuotes() async {
         let md = "> Quoted text"
         let output = await SyntaxHighlighter.highlight(md, format: ".md")
