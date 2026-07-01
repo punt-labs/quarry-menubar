@@ -19,7 +19,31 @@ Quarry Menu Bar sits in your menu bar and gives you instant access to your Quarr
 The app does **not** manage Quarry itself. It follows Quarry's current connection model:
 
 - Use the remote profile in `~/.punt-labs/mcp-proxy/quarry.toml` when present
-- Otherwise connect to local Quarry at `https://localhost:8420` with the pinned CA in `~/.punt-labs/quarry/tls/ca.crt`
+- Otherwise connect to local Quarry at `https://127.0.0.1:8420` with the pinned CA in `~/.punt-labs/quarry/tls/ca.crt`
+
+## Install via Homebrew
+
+```bash
+brew install punt-labs/homebrew-tap/quarry-menubar
+```
+
+This installs a prebuilt, universal (Apple Silicon + Intel) `QuarryMenuBar.app`
+from the latest GitHub Release. It is a **formula, not a cask**, so Homebrew
+does not quarantine the download: the app is ad-hoc signed but **not
+notarized**, and it still launches with no Gatekeeper prompt and no Developer
+ID certificate. No Xcode or build tools are required.
+
+The formula installs the app into the Homebrew prefix. To make it visible in
+Spotlight and Launchpad, symlink it into `~/Applications`:
+
+```bash
+mkdir -p ~/Applications && ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app
+```
+
+It is a menu bar app - no Dock icon; look for the icon in the menu bar. It
+follows your active Quarry connection (remote profile in
+`~/.punt-labs/mcp-proxy/quarry.toml` if present, otherwise local Quarry at
+`https://127.0.0.1:8420`).
 
 ## Requirements
 

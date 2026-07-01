@@ -1,0 +1,162 @@
+name: Release
+
+# Publishes a prebuilt, universal QuarryMenuBar.app to a GitHub Release.
+#
+# The app is built on a macOS runner OUTSIDE any Homebrew sandbox, so SwiftPM
+# resolves HighlightSwift normally - no sandbox workarounds. The Release build
+# is ad-hoc signed ("Sign to Run Locally") by default; because the Homebrew
+# FORMULA (not a cask) that consumes this asset does not quarantine downloads,
+# the installed app launches without Developer ID or notarization.
+#
+# Trigger: push a tag `vX.Y.Z` whose version matches project.yml
+# MARKETING_VERSION. Release cadence is manual (tag when you want to ship).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release and upload assets
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build universal app and publish release
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install XcodeGen
+        run: |
+          set -euo pipefail
+          if brew list xcodegen &>/dev/null; then
+            brew link --overwrite xcodegen
+          else
+            brew install xcodegen
+          fi
+
+      - name: Resolve version and verify tag matches project.yml
+        id: version
+        run: |
+          set -euo pipefail
+          # grep -m1 stops after the first match, so there is no `| head`
+          # whose early pipe-close could SIGPIPE grep to a false failure under
+          # pipefail, and it is unambiguous if a second MARKETING_VERSION line
+          # is ever added.
+          version=$(grep -m1 'MARKETING_VERSION:' project.yml | sed 's/.*: *"\([^"]*\)".*/\1/')
+          tag="${GITHUB_REF_NAME}"
+          if [ "v$version" != "$tag" ]; then
+            echo "::error::Tag $tag does not match project.yml MARKETING_VERSION v$version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Run unit tests (release gate)
+        # Gate the release on tests: a tagged commit with failing tests must
+        # not ship. Runs before the build/package steps so a failure aborts
+        # the job before anything is published.
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -scheme QuarryMenuBar \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            -only-testing:QuarryMenuBarTests \
+            -quiet
+
+      - name: Build universal Release app
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -scheme QuarryMenuBar \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            -quiet
+
+      - name: Verify the binary is universal (arm64 + x86_64)
+        run: |
+          set -euo pipefail
+          bin="build/Build/Products/Release/QuarryMenuBar.app/Contents/MacOS/QuarryMenuBar"
+          archs=$(lipo -archs "$bin")
+          echo "archs: $archs"
+          # case matching is pipe-free, so pipefail cannot turn a SIGPIPE from
+          # `echo | grep -q` into a false pass/fail on this gate.
+          case " $archs " in
+            *" arm64 "*) ;;
+            *) echo "::error::built binary is missing the arm64 slice ($archs)"; exit 1 ;;
+          esac
+          case " $archs " in
+            *" x86_64 "*) ;;
+            *) echo "::error::built binary is missing the x86_64 slice ($archs)"; exit 1 ;;
+          esac
+
+      - name: Package the app (wrapped, xattr-stripped zip)
+        id: package
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          zip="QuarryMenuBar-v${version}-macos-universal.zip"
+          # Wrap one directory deep: Homebrew's staging descends into a single
+          # top-level directory, so the wrapper lets `prefix.install
+          # "QuarryMenuBar.app"` resolve. --norsrc/--noextattr/--noacl strip
+          # AppleDouble metadata; otherwise Homebrew's unzip materializes ._*
+          # sidecar files that break the code-signature seal.
+          rm -rf dist payload
+          mkdir -p payload dist
+          ditto build/Build/Products/Release/QuarryMenuBar.app payload/QuarryMenuBar.app
+          ditto -c -k --keepParent --norsrc --noextattr --noacl payload "dist/$zip"
+          ( cd dist && shasum -a 256 "$zip" > checksums.txt )
+          cat dist/checksums.txt
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the packaged bundle's code signature survived zipping
+        # The --norsrc/--noextattr/--noacl flags exist to keep the ad-hoc
+        # codesign seal intact through the zip round-trip. Verify the ARTIFACT
+        # about to ship, not the pre-zip build: extract the produced zip and
+        # verify the extracted bundle, so a regression that reintroduces ._*
+        # files (broken seal, dead app on launch) fails the job instead of
+        # publishing green.
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          zip="QuarryMenuBar-v${version}-macos-universal.zip"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          # Extract with unzip, NOT `ditto -x -k`: ditto merges AppleDouble
+          # (._*) entries back into xattrs and would MASK the regression this
+          # step guards against (dropping --norsrc/--noextattr/--noacl).
+          # Homebrew extracts with unzip, which materializes ._* files and
+          # breaks the seal - reproduce that here so the check fails on a bad
+          # artifact instead of passing green. The zip wraps the bundle one
+          # directory deep (payload/).
+          unzip -q "dist/$zip" -d "$tmp"
+          codesign --verify --strict --deep --verbose=2 "$tmp/payload/QuarryMenuBar.app"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          zip="QuarryMenuBar-v${version}-macos-universal.zip"
+          # Idempotent: a re-run (upload network blip, cancelled job, manual
+          # "Re-run jobs") must not fail because the release already exists.
+          # Create only if absent, then upload with --clobber to replace assets.
+          gh release view "v${version}" >/dev/null 2>&1 || \
+            gh release create "v${version}" \
+              --title "v${version}" \
+              --notes "Prebuilt universal (arm64 + x86_64) QuarryMenuBar.app. Install via Homebrew: \`brew install punt-labs/homebrew-tap/quarry-menubar\`."
+          gh release upload "v${version}" "dist/$zip" "dist/checksums.txt" --clobber

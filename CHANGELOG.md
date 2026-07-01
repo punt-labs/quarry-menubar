@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Homebrew distribution: `brew install punt-labs/homebrew-tap/quarry-menubar` installs a prebuilt, universal (arm64 + x86_64) app from a GitHub Release. Because it ships as a formula (not a cask), Homebrew does not quarantine the download, so the ad-hoc-signed app launches without notarization or a Developer ID certificate. A `release.yml` GitHub Actions workflow builds the universal app on tag push (`v*`), packages it as an attribute-stripped zip, and publishes the release.
+
 ### Changed
 
 - Replatformed the menu bar app onto Quarry's connection model so it attaches to the active local or remote Quarry server instead of trying to manage its own daemon.
