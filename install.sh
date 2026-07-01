@@ -4,7 +4,7 @@
 # pipe this straight into a shell):
 #   curl -fsSL https://raw.githubusercontent.com/punt-labs/quarry-menubar/main/install.sh -o install.sh
 #   less install.sh
-#   bash install.sh
+#   sh install.sh
 set -eu
 
 # --- Colors (disabled when not a terminal) ---
@@ -96,9 +96,14 @@ fi
 
 info "Linking $APP into ~/Applications..."
 
+# Initialized before the link attempt so `set -u` never sees it unset in the
+# footer, whichever branch runs.
+linked=no
 if PREFIX="$(brew --prefix "$BINARY")" && mkdir -p "$HOME/Applications" && ln -sfn "$PREFIX/$APP" "$HOME/Applications/$APP"; then
+  linked=yes
   ok "$HOME/Applications/$APP -> $PREFIX/$APP"
 else
+  linked=no
   warn "Could not link $APP into ~/Applications."
   warn "$BINARY is installed and works now: open -a QuarryMenuBar"
   warn "Without the link it will not appear in Spotlight or Launchpad. To add it, run:"
@@ -108,8 +113,15 @@ else
 fi
 
 # --- Done ---
+# Headline reflects Step 5: "ready!" only when the ~/Applications link exists,
+# otherwise "installed." (the app still runs via `open -a` — the Step 5 warn
+# already printed the manual `ln` remediation, so it is not repeated here).
 
-printf '\n%b%b%s is ready!%b\n\n' "$GREEN" "$BOLD" "$BINARY" "$NC"
+if [ "$linked" = yes ]; then
+  printf '\n%b%b%s is ready!%b\n\n' "$GREEN" "$BOLD" "$BINARY" "$NC"
+else
+  printf '\n%b%b%s is installed.%b\n\n' "$GREEN" "$BOLD" "$BINARY" "$NC"
+fi
 printf '%s is a menu-bar-only accessory — no Dock icon.\n' "$APP"
 printf 'Look for its icon in the macOS menu bar (top-right of the screen).\n\n'
 printf 'Launch it:\n'

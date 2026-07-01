@@ -34,7 +34,7 @@ script before running it rather than piping it blindly into a shell:
 # Fetch, review, then run
 curl -fsSL https://raw.githubusercontent.com/punt-labs/quarry-menubar/main/install.sh -o install.sh
 less install.sh          # review before running
-bash install.sh
+sh install.sh
 ```
 
 Or clone the repo and run it from there:
