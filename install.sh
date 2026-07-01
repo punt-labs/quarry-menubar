@@ -1,19 +1,23 @@
 #!/bin/sh
 # Install quarry-menubar — macOS menu bar app for Quarry document search.
-# Usage: curl -fsSL https://raw.githubusercontent.com/punt-labs/quarry-menubar/main/install.sh | sh
+# Usage: fetch, review, then run (the app is unsigned/non-notarized — do not
+# pipe this straight into a shell):
+#   curl -fsSL https://raw.githubusercontent.com/punt-labs/quarry-menubar/main/install.sh -o install.sh
+#   less install.sh
+#   bash install.sh
 set -eu
 
 # --- Colors (disabled when not a terminal) ---
 if [ -t 1 ]; then
-  BOLD='\033[1m' GREEN='\033[32m' YELLOW='\033[33m' NC='\033[0m'
+  BOLD='\033[1m' GREEN='\033[32m' YELLOW='\033[33m' RED='\033[31m' NC='\033[0m'
 else
-  BOLD='' GREEN='' YELLOW='' NC=''
+  BOLD='' GREEN='' YELLOW='' RED='' NC=''
 fi
 
 info() { printf '%b▶%b %s\n' "$BOLD" "$NC" "$1"; }
 ok()   { printf '  %b✓%b %s\n' "$GREEN" "$NC" "$1"; }
 warn() { printf '  %b!%b %s\n' "$YELLOW" "$NC" "$1"; }
-fail() { printf '  %b✗%b %s\n' "$YELLOW" "$NC" "$1"; exit 1; }
+fail() { printf '  %b✗%b %s\n' "$RED" "$NC" "$1"; exit 1; }
 
 TAP="punt-labs/homebrew-tap"
 TAP_SHORT="punt-labs/tap"
@@ -42,7 +46,8 @@ fi
 
 info "Adding Homebrew tap..."
 
-if brew tap | grep -qx "$TAP_SHORT"; then
+taps="$(brew tap)" || fail "Could not list Homebrew taps"
+if printf '%s\n' "$taps" | grep -qx "$TAP_SHORT"; then
   ok "tap already added ($TAP_SHORT)"
 else
   brew tap "$TAP" || fail "Failed to add tap $TAP"
@@ -79,13 +84,25 @@ fi
 # cask-only feature. quarry-menubar ships as a formula (not a cask) to avoid
 # notarization, so the symlink is a required post-install step. `ln -sfn`
 # makes it idempotent — an existing link is replaced in place.
+#
+# NON-FATAL: by this point the app is installed and launchable via
+# `open -a QuarryMenuBar`, so a symlink failure is a warning with recovery
+# guidance, not a fatal error. The whole compound is the `if` condition so
+# `set -e` does not abort on a prefix/mkdir/ln failure; any of them routes to
+# the same warning and the script still exits 0.
 
 info "Linking $APP into ~/Applications..."
 
-PREFIX="$(brew --prefix "$BINARY")" || fail "Could not resolve Homebrew prefix for $BINARY"
-mkdir -p "$HOME/Applications"
-ln -sfn "$PREFIX/$APP" "$HOME/Applications/$APP" || fail "Failed to link $APP into ~/Applications"
-ok "$HOME/Applications/$APP -> $PREFIX/$APP"
+if PREFIX="$(brew --prefix "$BINARY")" && mkdir -p "$HOME/Applications" && ln -sfn "$PREFIX/$APP" "$HOME/Applications/$APP"; then
+  ok "$HOME/Applications/$APP -> $PREFIX/$APP"
+else
+  warn "Could not link $APP into ~/Applications."
+  warn "$BINARY is installed and works now: open -a QuarryMenuBar"
+  warn "Without the link it will not appear in Spotlight or Launchpad. To add it, run:"
+  # Literal recovery command for the user to copy — the $(...) must not expand here.
+  # shellcheck disable=SC2016
+  warn '  ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app'
+fi
 
 # --- Done ---
 
