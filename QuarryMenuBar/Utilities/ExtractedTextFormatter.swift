@@ -18,9 +18,10 @@ enum ExtractedTextFormatter {
 
         // Only reflow content whose line-length distribution looks like hard-wrapped
         // prose. Short-line content (verse, addresses, bibliographies) is passed through
-        // UNCHANGED so its intentional line structure is never flattened into one blob.
+        // with its line structure intact — we still normalize line endings so CR/CRLF
+        // never leaks into the rendered detail, but the intentional breaks are untouched.
         guard looksLikeHardWrappedProse(lines) else {
-            return text
+            return normalized
         }
 
         let reflowed = reflowParagraphs(in: normalized)
