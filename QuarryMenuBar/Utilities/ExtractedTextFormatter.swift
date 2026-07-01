@@ -329,14 +329,11 @@ enum ExtractedTextFormatter {
     }
 
     private static func isTitleLikeToken(_ token: Substring) -> Bool {
-        let scalars = token.unicodeScalars.filter(CharacterSet.letters.contains)
-        guard let first = scalars.first else { return false }
-
-        if CharacterSet.uppercaseLetters.contains(first) {
-            return true
+        guard let first = token.unicodeScalars.first(where: CharacterSet.letters.contains) else {
+            return false
         }
 
-        return scalars.allSatisfy(CharacterSet.uppercaseLetters.contains)
+        return CharacterSet.uppercaseLetters.contains(first)
     }
 
     private static func joinParagraphLines(_ lines: [String]) -> String {
