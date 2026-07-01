@@ -5,7 +5,7 @@ SCHEME = QuarryMenuBar
 DESTINATION = platform=macOS
 DERIVED_DATA = ./DerivedData
 
-.PHONY: help generate build test clean lint format all run version bump-patch bump-minor bump-major bump-build
+.PHONY: help generate build test clean lint format check all run version bump-patch bump-minor bump-major bump-build
 
 help:
 	@echo "Available commands:"
@@ -98,6 +98,9 @@ run: build
 
 all: generate format lint build test
 	@echo "All steps complete."
+
+check: format lint test
+	@echo "make check: format + lint + test passed."
 
 # =============================================================================
 # Versioning
