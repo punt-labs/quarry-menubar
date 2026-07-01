@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Hid the Dock icon so the app runs menu-bar-only. `LSUIElement` now lives in the XcodeGen `info.properties` block (the source of the authoritative `Info.plist`); the previously-set `INFOPLIST_KEY_LSUIElement` build setting was inert because the target ships an explicit `INFOPLIST_FILE`. The built app now registers as a `UIElement` accessory instead of a `Foreground` app.
 - Restored localhost HTTPS support by trusting Quarry's pinned PEM CA and validating private-CA certificates correctly.
 - Fixed connection fallback and refresh handling so stale refreshes do not overwrite newer state and logged-out proxy configs fall back to local Quarry again.
 - Classified TLS trust failures as configuration issues, restored the detail copy action, and tightened remote login guidance for authenticated Quarry servers.
