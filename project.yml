@@ -37,7 +37,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.puntlabs.quarry-menubar
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        INFOPLIST_KEY_LSUIElement: YES
         CODE_SIGN_ENTITLEMENTS: QuarryMenuBar/Resources/QuarryMenuBar.entitlements
     info:
       path: QuarryMenuBar/Info.plist
@@ -45,6 +44,7 @@ targets:
         CFBundleDisplayName: Quarry
         LSMinimumSystemVersion: "14.0"
         ITSAppUsesNonExemptEncryption: false
+        LSUIElement: true
     entitlements:
       path: QuarryMenuBar/Resources/QuarryMenuBar.entitlements
       properties:
