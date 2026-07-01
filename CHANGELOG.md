@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `install.sh` wrapper that runs the full Homebrew flow in one idempotent command — `brew tap`, `brew trust`, install-or-upgrade, and the required `~/Applications` symlink. The symlink is a documented required step because the Homebrew formula cannot create it: Homebrew's install sandbox forbids writes to `$HOME`, and auto-linking into `~/Applications` is a cask-only feature the formula avoids to skip notarization.
 - Homebrew distribution: `brew install punt-labs/homebrew-tap/quarry-menubar` installs a prebuilt, universal (arm64 + x86_64) app from a GitHub Release. Because it ships as a formula (not a cask), Homebrew does not quarantine the download, so the ad-hoc-signed app launches without notarization or a Developer ID certificate. A `release.yml` GitHub Actions workflow builds the universal app on tag push (`v*`), packages it as an attribute-stripped zip, and publishes the release.
 
 ### Changed
