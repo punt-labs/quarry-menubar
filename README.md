@@ -19,7 +19,7 @@ Quarry Menu Bar sits in your menu bar and gives you instant access to your Quarr
 The app does **not** manage Quarry itself. It follows Quarry's current connection model:
 
 - Use the remote profile in `~/.punt-labs/mcp-proxy/quarry.toml` when present
-- Otherwise connect to local Quarry at `https://localhost:8420` with the pinned CA in `~/.punt-labs/quarry/tls/ca.crt`
+- Otherwise connect to local Quarry at `https://127.0.0.1:8420` with the pinned CA in `~/.punt-labs/quarry/tls/ca.crt`
 
 ## Install via Homebrew
 
@@ -37,13 +37,13 @@ The formula installs the app into the Homebrew prefix. To make it visible in
 Spotlight and Launchpad, symlink it into `~/Applications`:
 
 ```bash
-ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app
+mkdir -p ~/Applications && ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app
 ```
 
 It is a menu bar app - no Dock icon; look for the icon in the menu bar. It
 follows your active Quarry connection (remote profile in
 `~/.punt-labs/mcp-proxy/quarry.toml` if present, otherwise local Quarry at
-`https://localhost:8420`).
+`https://127.0.0.1:8420`).
 
 ## Requirements
 
