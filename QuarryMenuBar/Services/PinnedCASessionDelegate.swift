@@ -48,6 +48,24 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         trustFailureLock.unlock()
     }
 
+    /// Internal rather than private so the test suite can pin the cert-SAN contract the
+    /// loopback-normalization fix relies on (a SAN with `IP Address:127.0.0.1` must match the
+    /// `127.0.0.1` the app dials). Not part of the public API; called only from `handle(challenge:)`.
+    func hostMatchesCertificate(
+        _ host: String,
+        certificate leafCertificate: SecCertificate
+    ) -> Bool {
+        let alternativeNames = subjectAlternativeNames(for: leafCertificate)
+        if !alternativeNames.isEmpty {
+            return alternativeNames.contains { matches(host: host, pattern: $0) }
+        }
+
+        guard let commonName = commonName(for: leafCertificate) else {
+            return false
+        }
+        return matches(host: host, pattern: commonName)
+    }
+
     // MARK: Private
 
     private enum CertificateError: Error {
@@ -175,21 +193,6 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
         }
 
         completionHandler(.useCredential, URLCredential(trust: serverTrust))
-    }
-
-    private func hostMatchesCertificate(
-        _ host: String,
-        certificate leafCertificate: SecCertificate
-    ) -> Bool {
-        let alternativeNames = subjectAlternativeNames(for: leafCertificate)
-        if !alternativeNames.isEmpty {
-            return alternativeNames.contains { matches(host: host, pattern: $0) }
-        }
-
-        guard let commonName = commonName(for: leafCertificate) else {
-            return false
-        }
-        return matches(host: host, pattern: commonName)
     }
 
     private func subjectAlternativeNames(for certificate: SecCertificate) -> [String] {
