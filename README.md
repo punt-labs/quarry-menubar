@@ -24,8 +24,19 @@ The app does **not** manage Quarry itself. It follows Quarry's current connectio
 ## Install via Homebrew
 
 ```bash
+# First time only: add the tap and trust it. Homebrew requires third-party
+# taps to be trusted before it will install their formulae.
+brew tap punt-labs/homebrew-tap
+brew trust punt-labs/tap
+
+# Install (and, later, upgrade)
 brew install punt-labs/homebrew-tap/quarry-menubar
 ```
+
+If you skip the trust step, Homebrew refuses with
+`Refusing to load formula ... from untrusted tap`. Trust is a one-time,
+per-tap action; subsequent `brew install`/`brew upgrade` runs need only the
+last command.
 
 This installs a prebuilt, universal (Apple Silicon + Intel) `QuarryMenuBar.app`
 from the latest GitHub Release. It is a **formula, not a cask**, so Homebrew
