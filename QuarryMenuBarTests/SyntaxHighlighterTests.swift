@@ -1,8 +1,11 @@
+import AppKit
 import HighlightSwift
 @testable import QuarryMenuBar
 import XCTest
 
 final class SyntaxHighlighterTests: XCTestCase {
+
+    // MARK: Internal
 
     // MARK: - isCodeFormat
 
@@ -108,6 +111,21 @@ final class SyntaxHighlighterTests: XCTestCase {
         XCTAssertEqual(String(output.text.characters), "Use foo here")
     }
 
+    func testMarkdownInlineCodeUsesReadableNeutralStyling() async throws {
+        let md = "Use `foo` here"
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+        let attributed = NSAttributedString(output.text)
+        let location = try XCTUnwrap(attributeLocation(of: "foo", in: attributed))
+
+        let foreground = attributed.attribute(.foregroundColor, at: location, effectiveRange: nil) as? NSColor
+        let background = attributed.attribute(.backgroundColor, at: location, effectiveRange: nil) as? NSColor
+        let font = attributed.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+
+        XCTAssertEqual(foreground, NSColor.labelColor)
+        XCTAssertNotNil(background)
+        XCTAssertEqual(font?.fontDescriptor.symbolicTraits.contains(.monoSpace), true)
+    }
+
     func testMarkdownStripsBold() async {
         let md = "This is **bold** text"
         let output = await SyntaxHighlighter.highlight(md, format: ".md")
@@ -118,6 +136,21 @@ final class SyntaxHighlighterTests: XCTestCase {
         let md = "Click [here](https://example.com) now"
         let output = await SyntaxHighlighter.highlight(md, format: ".md")
         XCTAssertEqual(String(output.text.characters), "Click here now")
+    }
+
+    func testMarkdownLinkAppliesUnderlineStyle() async throws {
+        let md = "Click [here](https://example.com) now"
+        let output = await SyntaxHighlighter.highlight(md, format: ".md")
+
+        let attributed = NSAttributedString(output.text)
+        let location = try XCTUnwrap(attributeLocation(of: "here", in: attributed))
+
+        let underline = attributed.attribute(
+            .underlineStyle,
+            at: location,
+            effectiveRange: nil
+        ) as? Int
+        XCTAssertEqual(underline, NSUnderlineStyle.single.rawValue)
     }
 
     func testMarkdownStripsBlockQuotes() async {
@@ -152,5 +185,14 @@ final class SyntaxHighlighterTests: XCTestCase {
         XCTAssertEqual(String(xcode.text.characters), code)
         XCTAssertEqual(String(github.text.characters), code)
         XCTAssertNotEqual(xcode.text, github.text)
+    }
+
+    // MARK: Private
+
+    /// Location of `substring` within `attributed`, or `nil` when absent — so callers can
+    /// `XCTUnwrap` and fail cleanly instead of reading attributes at an out-of-bounds index.
+    private func attributeLocation(of substring: String, in attributed: NSAttributedString) -> Int? {
+        let range = (attributed.string as NSString).range(of: substring)
+        return range.location == NSNotFound ? nil : range.location
     }
 }
