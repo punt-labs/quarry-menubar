@@ -74,7 +74,43 @@ final class ResultDetailTests: XCTestCase {
 
         let content = await ResultDetail.loadContent(result: result, client: client)
 
+        // Verbatim except line-ending hygiene: the input uses only LF, so it survives
+        // unchanged — no reflow, no join, no paragraph reconstruction.
         XCTAssertEqual(content.text, showText)
+        XCTAssertNil(content.warningMessage)
+    }
+
+    func testLoadContentNormalizesCarriageReturnsToLineFeeds() async throws {
+        // Some /show docs return CRLF (or bare CR). loadContent normalizes CR/CRLF -> LF so no
+        // stray carriage return leaks into the SwiftUI Text. This is hygiene, not reflow: the
+        // existing LF break structure is preserved, only carriage returns are rewritten.
+        let result = makeResult(sourceFormat: ".pdf")
+        let client = try mockClient()
+
+        MockURLProtocol.requestHandler = { request in
+            let requestURL = try XCTUnwrap(request.url)
+            switch requestURL.path {
+            case "/show":
+                return jsonResponse(
+                    """
+                    {
+                        "document_name": "README.md",
+                        "page_number": 3,
+                        "text": "a\\r\\nb\\rc"
+                    }
+                    """,
+                    url: requestURL
+                )
+            default:
+                XCTFail("Unexpected request: \(requestURL.absoluteString)")
+                return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
+            }
+        }
+
+        let content = await ResultDetail.loadContent(result: result, client: client)
+
+        XCTAssertEqual(content.text, "a\nb\nc")
+        XCTAssertFalse(content.text.contains("\r"))
         XCTAssertNil(content.warningMessage)
     }
 

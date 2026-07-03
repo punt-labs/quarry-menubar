@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 
-- `ExtractedTextFormatter.`
+- `ExtractedTextFormatter` — the app-side PDF reflow/de-wrap utility. Paragraph reconstruction now happens upstream in Quarry's extraction.
 
 ### Fixed
 
