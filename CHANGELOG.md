@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Replatformed the menu bar app onto Quarry's connection model so it attaches to the active local or remote Quarry server instead of trying to manage its own daemon.
+- Detail view now renders page text exactly as Quarry returns it; removed the app-side reflow/de-wrap heuristics (paragraph reconstruction moves upstream to Quarry's extraction).
+
+### Removed
+
+- `ExtractedTextFormatter` — the app-side PDF reflow/de-wrap utility. Paragraph reconstruction now happens upstream in Quarry's extraction.
 
 ### Fixed
 

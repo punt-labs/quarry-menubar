@@ -88,11 +88,7 @@ struct ResultDetail: View {
                 collection: result.collection
             )
             return ResultDetailContent(
-                text: ExtractedTextFormatter.formatDetailText(
-                    response.text,
-                    sourceFormat: result.sourceFormat,
-                    pageType: result.pageType
-                ),
+                text: normalizeLineEndings(response.text),
                 warningMessage: nil
             )
         } catch {
@@ -142,6 +138,15 @@ struct ResultDetail: View {
             }
             .foregroundStyle(.secondary)
         }
+    }
+
+    /// Normalize CR/CRLF line endings to LF. Some /show documents return CRLF (e.g. decorated
+    /// schema lines), and raw `\r` would leak into the SwiftUI `Text` as a stray control
+    /// character. This is line-ending hygiene only — not reflow: `\n` breaks are preserved.
+    private static func normalizeLineEndings(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
     }
 
     private static func fallbackMessage(for error: Error) -> String {
