@@ -88,11 +88,7 @@ struct ResultDetail: View {
                 collection: result.collection
             )
             return ResultDetailContent(
-                text: ExtractedTextFormatter.formatDetailText(
-                    response.text,
-                    sourceFormat: result.sourceFormat,
-                    pageType: result.pageType
-                ),
+                text: response.text,
                 warningMessage: nil
             )
         } catch {
