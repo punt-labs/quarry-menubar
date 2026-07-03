@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-03
+
 ### Added
 
 - `install.sh` wrapper that runs the full Homebrew flow in one idempotent command — `brew tap`, `brew trust`, install-or-upgrade, and the required `~/Applications` symlink. The symlink is a documented required step because the Homebrew formula cannot create it: Homebrew's install sandbox forbids writes to `$HOME`, and auto-linking into `~/Applications` is a cask-only feature the formula avoids to skip notarization.
