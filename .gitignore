@@ -46,3 +46,6 @@ Package.resolved
 # Local-only files (machine-specific, per-user)
 *.local
 *.local.*
+
+# LanceDB vector store (quarry index cruft)
+lancedb/
