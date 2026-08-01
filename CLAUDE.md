@@ -77,16 +77,18 @@ Version lives in `project.yml` (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`)
 
 The app is `LSUIElement: YES` (no dock icon, no main menu — menu bar only). Sandbox is disabled (`com.apple.security.app-sandbox: false`) so the app can make network requests freely and reveal local files in Finder when connected to local Quarry.
 
+An `AppDelegate` (`@NSApplicationDelegateAdaptor`) owns the app-lifetime `ConnectionManager` and starts the connect from `applicationDidFinishLaunching` — **not** from a view's `.task`, which `MenuBarExtra(.window)` cancels on every panel teardown. See [`DESIGN.md`](DESIGN.md) ADR-002 for why connect ownership is app-scoped.
+
 ### Connection Resolution Flow
 
-This is the critical integration point with the Quarry backend:
+This is the critical integration point with the Quarry backend. `ConnectionProfileLoader` mirrors the `quarry` CLI's `TargetResolver` (see [`DESIGN.md`](DESIGN.md) ADR-003):
 
-1. `ConnectionProfileLoader` checks `~/.punt-labs/mcp-proxy/quarry.toml`
-2. If a remote profile exists, the app uses that server as authoritative
-3. Otherwise the app falls back to local Quarry at `https://localhost:8420`
-4. `QuarryClient` talks to the resolved base URL with optional Bearer auth and a pinned CA
+1. **Remote** — if `~/.punt-labs/mcp-proxy/quarry.toml` names a **non-loopback** host, the app uses that server as authoritative: `url` host:port + pinned `ca_cert` + `Authorization: Bearer` token.
+2. **Local (loopback)** — otherwise resolve the running daemon on `127.0.0.1` from its live `serve.port` and `serve.token` in the startup-database run dir (`~/.punt-labs/quarry/data/<db>/`, `<db>` from `config.toml`'s `[default] database`, else `default`), pinning the local CA at `~/.punt-labs/quarry/tls/ca.crt`. A loopback `quarry.toml` falls through to this path.
+3. `QuarryClient` talks the REST API under `/v1/` (only `/health` at the root) with the resolved Bearer token and pinned CA.
+4. A down daemon (no `serve.port`), an unreadable/invalid `serve.port`/`serve.token`, or a broken `config.toml` each surface a distinct configuration error pointing at the daemon.
 
-There is no subprocess ownership, no `serve.port` discovery, and no runtime dependency on the `quarry` CLI being on `PATH`.
+There is no subprocess ownership and no runtime dependency on the `quarry` CLI being on `PATH` — the app reads the daemon's own `serve.port`/`serve.token`, it does not spawn or manage `quarryd`.
 
 ### MVVM + @Observable
 
@@ -101,15 +103,17 @@ The app uses Swift 5.9's `@Observable` macro (not the older `ObservableObject` p
 
 ### Key API Endpoints
 
+Quarry 2.0 serves engine endpoints under `/v1/`; only `/health` stays at the root.
+
 | Endpoint | Client Method | Returns |
 |----------|--------------|---------|
 | `GET /health` | `health()` | `HealthResponse` |
-| `GET /search?q=&limit=` | `search(query:limit:collection:)` | `SearchResponse` with `[SearchResult]` |
-| `GET /documents?collection=` | `documents(collection:)` | `DocumentsResponse` with file paths |
-| `GET /collections` | `collections()` | `CollectionsResponse` |
-| `GET /status` | `status()` | `StatusResponse` (db stats) |
-| `GET /databases` | `databases()` | `DatabasesResponse` for the active server database |
-| `GET /show?document=&page=` | `show(document:page:collection:)` | `ShowPageResponse` with full page text |
+| `GET /v1/search?q=&limit=` | `search(query:limit:collection:)` | `SearchResponse` with `[SearchResult]` |
+| `GET /v1/documents?collection=` | `documents(collection:)` | `DocumentsResponse` with file paths |
+| `GET /v1/collections` | `collections()` | `CollectionsResponse` |
+| `GET /v1/status` | `status()` | `StatusResponse` (db stats) |
+| `GET /v1/databases` | `databases()` | `DatabasesResponse` for the active server database |
+| `GET /v1/show?document=&page=` | `show(document:page:collection:)` | `ShowPageResponse` with full page text |
 
 ### Syntax Highlighting
 
