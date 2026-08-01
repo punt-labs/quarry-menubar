@@ -125,6 +125,8 @@ final class QuarryClient {
     // MARK: - Public API
 
     func health() async throws -> HealthResponse {
+        // `/health` is the sole endpoint that stays at the server root; every
+        // engine endpoint moved under `/v1/` in quarry 2.0 (DES-031 v2.2).
         try await get("/health")
     }
 
@@ -137,7 +139,7 @@ final class QuarryClient {
         if let collection {
             params["collection"] = collection
         }
-        return try await get("/search", params: params)
+        return try await get(engine: "search", params: params)
     }
 
     func documents(collection: String? = nil) async throws -> DocumentsResponse {
@@ -145,19 +147,19 @@ final class QuarryClient {
         if let collection {
             params["collection"] = collection
         }
-        return try await get("/documents", params: params)
+        return try await get(engine: "documents", params: params)
     }
 
     func collections() async throws -> CollectionsResponse {
-        try await get("/collections")
+        try await get(engine: "collections")
     }
 
     func status() async throws -> StatusResponse {
-        try await get("/status")
+        try await get(engine: "status")
     }
 
     func databases() async throws -> DatabasesResponse {
-        try await get("/databases")
+        try await get(engine: "databases")
     }
 
     func show(
@@ -172,10 +174,14 @@ final class QuarryClient {
         if let collection {
             params["collection"] = collection
         }
-        return try await get("/show", params: params)
+        return try await get(engine: "show", params: params)
     }
 
     // MARK: Private
+
+    /// The engine API-version prefix. Every endpoint except `/health` is served
+    /// under `/v1/` by quarry 2.0's daemon (DES-031 v2.2).
+    private static let apiVersionPrefix = "v1"
 
     private let session: URLSession
     private let sessionDelegate: PinnedCASessionDelegate?
@@ -217,6 +223,18 @@ final class QuarryClient {
             delegateQueue: nil
         )
         return (session, delegate)
+    }
+
+    /// Issue a GET against a `/v1/`-prefixed engine endpoint.
+    ///
+    /// `name` is the bare endpoint (`search`, `status`, `show`, …); this prepends
+    /// the API-version prefix so callers never repeat `/v1/`. `/health` bypasses
+    /// this and calls `get(_:params:)` at the server root directly.
+    private func get<T: Decodable>(
+        engine name: String,
+        params: [String: String] = [:]
+    ) async throws -> T {
+        try await get("/\(Self.apiVersionPrefix)/\(name)", params: params)
     }
 
     private func get<T: Decodable>(

@@ -293,6 +293,8 @@ final class QuarryModelTests: XCTestCase {
 
 final class QuarryClientNetworkTests: XCTestCase {
 
+    // MARK: Internal
+
     override func tearDown() {
         MockURLProtocol.requestHandler = nil
         super.tearDown()
@@ -345,6 +347,39 @@ final class QuarryClientNetworkTests: XCTestCase {
         XCTAssertEqual(queryDict["q"], "hello")
         XCTAssertEqual(queryDict["limit"], "5")
         XCTAssertEqual(queryDict["collection"], "research")
+    }
+
+    func testEveryEngineEndpointUsesV1PrefixAndHealthStaysAtRoot() async throws {
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8420"))
+        let client = try mockClient(profile: testProfile(baseURL: baseURL))
+
+        // The mock records the requested path and routes to a shape-appropriate
+        // body keyed by that path, so every client method decodes.
+        let recorder = PathRecorder()
+        MockURLProtocol.requestHandler = { request in
+            let path = request.url?.path ?? ""
+            recorder.record(path)
+            return jsonResponse(Self.responseBody(forPath: path), url: request.url ?? baseURL)
+        }
+
+        // Exercise every endpoint the client exposes and assert its wire path.
+        // `/health` is the sole endpoint that stays at the server root; the rest
+        // moved under `/v1/` in quarry 2.0. A partial regression to a root path on
+        // any one of them fails here.
+        _ = try await client.health()
+        XCTAssertEqual(recorder.last, "/health")
+        _ = try await client.search(query: "hello")
+        XCTAssertEqual(recorder.last, "/v1/search")
+        _ = try await client.documents()
+        XCTAssertEqual(recorder.last, "/v1/documents")
+        _ = try await client.collections()
+        XCTAssertEqual(recorder.last, "/v1/collections")
+        _ = try await client.status()
+        XCTAssertEqual(recorder.last, "/v1/status")
+        _ = try await client.databases()
+        XCTAssertEqual(recorder.last, "/v1/databases")
+        _ = try await client.show(document: "a.pdf", page: 1)
+        XCTAssertEqual(recorder.last, "/v1/show")
     }
 
     func testSearchRequestIncludesAuthorizationHeader() async throws {
@@ -487,4 +522,58 @@ final class QuarryClientNetworkTests: XCTestCase {
         }
     }
 
+    // MARK: Private
+
+    /// A minimally-valid response body for each endpoint path, so every client
+    /// method decodes when the endpoint-coverage test drives it.
+    private static func responseBody(forPath path: String) -> String {
+        switch path {
+        case "/health":
+            #"{"status":"ok","uptime_seconds":1.0}"#
+        case "/v1/search":
+            #"{"query":"hello","total_results":0,"results":[]}"#
+        case "/v1/documents":
+            #"{"total_documents":0,"documents":[]}"#
+        case "/v1/collections":
+            #"{"total_collections":0,"collections":[]}"#
+        case "/v1/status":
+            #"""
+            {"document_count":0,"collection_count":0,"chunk_count":0,
+             "database_path":"/tmp/default/lancedb","database_size_bytes":0,
+             "embedding_model":"m","embedding_dimension":768}
+            """#
+        case "/v1/databases":
+            #"{"total_databases":0,"databases":[]}"#
+        case "/v1/show":
+            #"{"document_name":"a.pdf","page_number":1,"text":"x"}"#
+        default:
+            "{}"
+        }
+    }
+
+}
+
+// MARK: - PathRecorder
+
+/// Records the most recent request path the mock protocol was asked for.
+///
+/// The mock handler runs on the URL-loading thread and the assertions read on
+/// the test thread (after `await`, which orders the two), so access is guarded
+/// by a lock to keep the record race-free.
+private final class PathRecorder: @unchecked Sendable {
+
+    // MARK: Internal
+
+    var last: String? {
+        lock.withLock { storedLast }
+    }
+
+    func record(_ path: String) {
+        lock.withLock { storedLast = path }
+    }
+
+    // MARK: Private
+
+    private let lock = NSLock()
+    private var storedLast: String?
 }

@@ -16,10 +16,12 @@ Quarry Menu Bar sits in your menu bar and gives you instant access to your Quarr
 - **Syntax-highlighted results** for code, Markdown, and prose
 - **Detail view** with full page context for each result
 
-The app does **not** manage Quarry itself. It follows Quarry's current connection model:
+The app does **not** manage Quarry itself. It follows Quarry's current connection model, mirroring the resolution the `quarry` CLI uses:
 
-- Use the remote profile in `~/.punt-labs/mcp-proxy/quarry.toml` when present
-- Otherwise connect to local Quarry at `https://127.0.0.1:8420` with the pinned CA in `~/.punt-labs/quarry/tls/ca.crt`
+- Use the **remote** profile in `~/.punt-labs/mcp-proxy/quarry.toml` when it names a non-loopback host (its `url`, pinned `ca_cert`, and `Authorization: Bearer` token)
+- Otherwise connect to the **local daemon** on loopback: read the bound port from `serve.port` and the live bearer from `serve.token` in the daemon's startup-database run dir (`~/.punt-labs/quarry/data/<db>/`, `<db>` from `config.toml`'s `[default] database`, else `default`), pinning the CA in `~/.punt-labs/quarry/tls/ca.crt`
+
+Quarry 2.0 serves every engine endpoint under `/v1/` (only `/health` stays at the root) and requires the daemon's `serve.token` on loopback requests. If `quarryd` is not running (no `serve.port`) or its `serve.token` is unreadable, the app shows a configuration error pointing at the daemon rather than a bare failure.
 
 ## Install via Homebrew
 
@@ -86,9 +88,9 @@ ID certificate. No Xcode or build tools are required.
 It is a menu-bar-only app — no Dock icon; look for the icon in the menu bar.
 Launch it with `open -a QuarryMenuBar`, Spotlight, or a double-click in
 `~/Applications` (not by running the `.app` bundle path directly). It follows
-your active Quarry connection (remote profile in
-`~/.punt-labs/mcp-proxy/quarry.toml` if present, otherwise local Quarry at
-`https://127.0.0.1:8420`).
+your active Quarry connection (a remote profile in
+`~/.punt-labs/mcp-proxy/quarry.toml` if it names a remote host, otherwise the
+local `quarryd` on loopback via its `serve.port`/`serve.token`).
 
 ## Requirements
 
@@ -156,7 +158,7 @@ The app is a Quarry client. It resolves the active connection, talks to Quarry o
 
 ```text
 QuarryMenuBarApp
-  -> ConnectionProfileLoader (reads quarry.toml or falls back to local TLS)
+  -> ConnectionProfileLoader (remote quarry.toml, else loopback serve.port/serve.token)
   -> ConnectionManager (resolves profile, probes health/status/databases)
   -> QuarryClient (HTTP(S) + Bearer auth + pinned CA)
   -> SearchViewModel (debounced search via QuarryClient)

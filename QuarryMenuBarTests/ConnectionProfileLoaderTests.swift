@@ -22,14 +22,18 @@ final class ConnectionProfileLoaderTests: XCTestCase {
         tempDirectory = nil
     }
 
-    func testMissingProxyConfigFallsBackToLocalProfile() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let localCA = tempDirectory.appendingPathComponent("ca.crt")
-        try "pem".write(to: localCA, atomically: true, encoding: .utf8)
+    // MARK: - Loopback (serve.port + serve.token)
+
+    func testMissingProxyConfigResolvesLoopbackWithServeToken() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "srv-token-abc")
 
         let loader = ConnectionProfileLoader(
-            proxyConfigURL: tempDirectory.appendingPathComponent("quarry.toml"),
-            localCAURL: localCA
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
         )
 
         let profile = try loader.load()
@@ -38,45 +42,288 @@ final class ConnectionProfileLoaderTests: XCTestCase {
         XCTAssertEqual(profile.origin, .localDefault)
         XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
         XCTAssertEqual(profile.caCertificateURL, localCA)
-        XCTAssertNil(profile.authToken)
-        // The app dials 127.0.0.1 but still presents the host as "localhost" for the user.
+        // The daemon now requires its live serve.token even on loopback (DES-031
+        // v2.2 R4); the loader must present it, not a nil bearer.
+        XCTAssertEqual(profile.authToken, "srv-token-abc")
+        // The app dials 127.0.0.1 but still presents the host as "localhost".
         XCTAssertEqual(profile.hostDisplayName, "localhost")
     }
 
-    func testProxyConfigLoadsRemoteProfileAndAuthHeader() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
-        try """
-        [quarry]
-        url = "wss://okinos.user.home.lab:8420/mcp"
-        ca_cert = "\(pinnedCA.path)"
-
-        [quarry.headers]
-        Authorization = "Bearer sk-test"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+    func testLoopbackUsesServePortNotHardcodedDefault() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "9137", token: "tok")
 
         let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
         )
 
         let profile = try loader.load()
 
-        XCTAssertEqual(profile.mode, .remote)
-        XCTAssertEqual(profile.origin, .proxyConfig)
-        XCTAssertEqual(profile.baseURL.absoluteString, "https://okinos.user.home.lab:8420")
-        XCTAssertEqual(profile.caCertificateURL, pinnedCA)
-        XCTAssertEqual(profile.authToken, "sk-test")
-        XCTAssertEqual(profile.hostDisplayName, "okinos.user.home.lab")
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:9137")
     }
 
-    func testProxyConfigWithoutQuarrySectionFallsBackToLocalProfile() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let localCA = tempDirectory.appendingPathComponent("ca.crt")
-        try "pem".write(to: localCA, atomically: true, encoding: .utf8)
+    func testMissingServePortThrowsDaemonNotRunning() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        // Run dir exists but no serve.port sidecar (daemon down).
+        let dataRoot = temp.appendingPathComponent("data")
+        try FileManager.default.createDirectory(
+            at: dataRoot.appendingPathComponent("default"),
+            withIntermediateDirectories: true
+        )
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case .daemonNotRunning = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected daemonNotRunning, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testMissingServeTokenThrowsServeTokenUnreadable() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: nil)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case .serveTokenUnreadable = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected serveTokenUnreadable, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testEmptyServeTokenThrowsServeTokenUnreadable() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "   \n")
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case .serveTokenUnreadable = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected serveTokenUnreadable, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testMissingLocalCAThrowsMissingLocalCACertificate() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let dataRoot = try writeRunDir(port: "8420", token: "tok")
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: temp.appendingPathComponent("missing-ca.crt"),
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case .missingLocalCACertificate = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected missingLocalCACertificate, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testActiveDatabaseFromConfigTomlSelectsRunDir() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        // Two run dirs; config.toml points startup at "work".
+        _ = try writeRunDir(db: "default", port: "8420", token: "default-token")
+        let dataRoot = try writeRunDir(db: "work", port: "8500", token: "work-token")
+        let configURL = temp.appendingPathComponent("config.toml")
+        try """
+        [default]
+        database = "work"
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: configURL
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8500")
+        XCTAssertEqual(profile.authToken, "work-token")
+    }
+
+    func testConfigTomlInlineCommentResolvesDatabase() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(db: "work", port: "8500", token: "work-token")
+        let configURL = temp.appendingPathComponent("config.toml")
+        try """
+        [default]
+        database = "work"  # the active project
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: configURL
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8500")
+        XCTAssertEqual(profile.authToken, "work-token")
+    }
+
+    func testConfigTomlSingleQuotedDatabaseResolves() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(db: "work", port: "8500", token: "work-token")
+        let configURL = temp.appendingPathComponent("config.toml")
+        try """
+        [default]
+        database = 'work'
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: configURL
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8500")
+        XCTAssertEqual(profile.authToken, "work-token")
+    }
+
+    func testConfigTomlEmptyDatabaseFallsBackToDefault() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(db: "default", port: "8420", token: "default-token")
+        let configURL = temp.appendingPathComponent("config.toml")
+        try """
+        [default]
+        database = ""
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: configURL
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
+        XCTAssertEqual(profile.authToken, "default-token")
+    }
+
+    func testConfigTomlUnparseableDatabaseThrowsMalformed() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "tok")
+        let configURL = temp.appendingPathComponent("config.toml")
+        // Bare, unquoted value — not a well-formed TOML string.
+        try """
+        [default]
+        database = work
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: configURL
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case let .malformedQuarryConfig(url, _) = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected malformedQuarryConfig, got \(error)")
+                return
+            }
+            XCTAssertEqual(url, configURL)
+        }
+    }
+
+    func testConfigTomlTraversalDatabaseNameThrowsMalformed() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "tok")
+        let configURL = temp.appendingPathComponent("config.toml")
+        try """
+        [default]
+        database = "../escape"
+        """.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: configURL
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case .malformedQuarryConfig = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected malformedQuarryConfig, got \(error)")
+                return
+            }
+        }
+    }
+
+    func testServePortPresentButInvalidThrowsServePortUnreadable() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        // serve.port exists (daemon claims a run dir) but holds garbage.
+        let dataRoot = try writeRunDir(port: "not-a-number", token: "tok")
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: temp.appendingPathComponent("quarry.toml"),
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
+        )
+
+        XCTAssertThrowsError(try loader.load()) { error in
+            guard case .servePortUnreadable = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected servePortUnreadable, got \(error)")
+                return
+            }
+        }
+    }
+
+    // MARK: - quarry.toml fall-through
+
+    func testProxyConfigWithoutQuarrySectionFallsThroughToLoopback() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "tok")
+        let proxyConfig = temp.appendingPathComponent("quarry.toml")
         try """
         [other]
         foo = "bar"
@@ -84,7 +331,35 @@ final class ConnectionProfileLoaderTests: XCTestCase {
 
         let loader = ConnectionProfileLoader(
             proxyConfigURL: proxyConfig,
-            localCAURL: localCA
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
+        )
+
+        let profile = try loader.load()
+
+        XCTAssertEqual(profile.mode, .local)
+        XCTAssertEqual(profile.origin, .localDefault)
+        XCTAssertEqual(profile.authToken, "tok")
+    }
+
+    func testLoopbackProxyConfigIsIgnoredInFavorOfServeToken() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "live-serve-token")
+        let proxyConfig = temp.appendingPathComponent("quarry.toml")
+        // A loopback login carries no usable token; the loader must fall through
+        // to the live serve.token, never the (absent) toml credential.
+        try """
+        [quarry]
+        url = "wss://localhost:8420/mcp"
+        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
+
+        let loader = ConnectionProfileLoader(
+            proxyConfigURL: proxyConfig,
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
         )
 
         let profile = try loader.load()
@@ -92,286 +367,96 @@ final class ConnectionProfileLoaderTests: XCTestCase {
         XCTAssertEqual(profile.mode, .local)
         XCTAssertEqual(profile.origin, .localDefault)
         XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
+        XCTAssertEqual(profile.caCertificateURL, localCA)
+        XCTAssertEqual(profile.authToken, "live-serve-token")
     }
 
-    func testProxyConfigDefaultsMissingPortToQuarryPort() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
+    func testIPv6LoopbackProxyConfigFallsThroughToServeToken() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "tok6")
+        let proxyConfig = temp.appendingPathComponent("quarry.toml")
         try """
         [quarry]
-        url = "wss://okinos.user.home.lab/mcp"
-        ca_cert = "\(pinnedCA.path)"
+        url = "wss://[::1]:8420/mcp"
         """.write(to: proxyConfig, atomically: true, encoding: .utf8)
 
         let loader = ConnectionProfileLoader(
             proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
         )
 
         let profile = try loader.load()
 
-        XCTAssertEqual(profile.baseURL.absoluteString, "https://okinos.user.home.lab:8420")
+        XCTAssertEqual(profile.mode, .local)
+        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
+        XCTAssertEqual(profile.authToken, "tok6")
     }
 
-    func testProxyConfigRejectsSecureURLWithoutPinnedCA() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
+    func testProxyConfigWithQuarrySectionButNoURLThrowsMissingProxyURL() throws {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = try writeLocalCA()
+        let dataRoot = try writeRunDir(port: "8420", token: "tok")
+        let proxyConfig = temp.appendingPathComponent("quarry.toml")
         try """
         [quarry]
-        url = "https://remote.example:8420"
+        ca_cert = "/tmp/whatever.crt"
         """.write(to: proxyConfig, atomically: true, encoding: .utf8)
 
         let loader = ConnectionProfileLoader(
             proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
+            localCAURL: localCA,
+            dataRootURL: dataRoot,
+            quarryConfigURL: temp.appendingPathComponent("config.toml")
         )
 
         XCTAssertThrowsError(try loader.load()) { error in
-            guard case let .missingProxyCACertificate(url) = error as? ConnectionProfileLoaderError else {
-                XCTFail("Expected missingProxyCACertificate, got \(error)")
+            guard case let .missingProxyURL(url) = error as? ConnectionProfileLoaderError else {
+                XCTFail("Expected missingProxyURL, got \(error)")
                 return
             }
             XCTAssertEqual(url, proxyConfig)
         }
     }
 
-    func testProxyConfigRejectsInsecureRemoteProfile() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        try """
-        [quarry]
-        url = "http://remote.example:8420"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        XCTAssertThrowsError(try loader.load()) { error in
-            guard case let .insecureRemoteProxyURL(url) = error as? ConnectionProfileLoaderError else {
-                XCTFail("Expected insecureRemoteProxyURL, got \(error)")
-                return
-            }
-            XCTAssertEqual(url, "http://remote.example:8420")
-        }
-    }
-
-    func testProxyConfigAllowsInsecureLoopbackProfile() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        try """
-        [quarry]
-        url = "ws://127.0.0.1:8420/mcp"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .local)
-        XCTAssertEqual(profile.baseURL.absoluteString, "http://127.0.0.1:8420")
-        XCTAssertNil(profile.caCertificateURL)
-    }
-
-    func testProxyConfigNormalizesSecureLocalhostToIPv4() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
-        try """
-        [quarry]
-        url = "wss://localhost:8420/mcp"
-        ca_cert = "\(pinnedCA.path)"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .local)
-        XCTAssertEqual(profile.origin, .proxyConfig)
-        XCTAssertEqual(profile.baseURL.scheme, "https")
-        XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
-        XCTAssertEqual(profile.baseURL.port, 8420)
-        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
-        XCTAssertEqual(profile.hostDisplayName, "localhost")
-    }
-
-    func testProxyConfigNormalizesInsecureLocalhostToIPv4() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        try """
-        [quarry]
-        url = "ws://localhost:8420/mcp"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .local)
-        XCTAssertEqual(profile.baseURL.scheme, "http")
-        XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
-        XCTAssertEqual(profile.baseURL.port, 8420)
-        XCTAssertEqual(profile.baseURL.absoluteString, "http://127.0.0.1:8420")
-        XCTAssertEqual(profile.hostDisplayName, "localhost")
-    }
-
-    func testProxyConfigNormalizesIPv6LoopbackToIPv4() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
-        try """
-        [quarry]
-        url = "wss://[::1]:8420/mcp"
-        ca_cert = "\(pinnedCA.path)"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .local)
-        XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
-        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
-        XCTAssertEqual(profile.hostDisplayName, "::1")
-    }
-
-    func testProxyConfigNormalizesUppercaseLocalhostToIPv4() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
-        try """
-        [quarry]
-        url = "wss://LOCALHOST:8420/mcp"
-        ca_cert = "\(pinnedCA.path)"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .local)
-        XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
-        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:8420")
-        XCTAssertEqual(profile.hostDisplayName, "LOCALHOST")
-    }
-
-    func testProxyConfigNormalizesLocalhostHostButKeepsNonDefaultPort() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
-        try """
-        [quarry]
-        url = "wss://localhost:9000/mcp"
-        ca_cert = "\(pinnedCA.path)"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .local)
-        XCTAssertEqual(profile.baseURL.host, "127.0.0.1")
-        XCTAssertEqual(profile.baseURL.port, 9000)
-        XCTAssertEqual(profile.baseURL.absoluteString, "https://127.0.0.1:9000")
-    }
-
-    func testProxyConfigKeepsRemoteIPv6LiteralBracketed() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
-        try """
-        [quarry]
-        url = "wss://[2001:db8::1]:8420/mcp"
-        ca_cert = "\(pinnedCA.path)"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .remote)
-        XCTAssertEqual(profile.baseURL.absoluteString, "https://[2001:db8::1]:8420")
-        XCTAssertEqual(profile.hostDisplayName, "2001:db8::1")
-    }
-
-    func testProxyConfigDoesNotRewriteRemoteHost() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        let pinnedCA = tempDirectory.appendingPathComponent("quarry-ca.crt")
-        try "pem".write(to: pinnedCA, atomically: true, encoding: .utf8)
-        try """
-        [quarry]
-        url = "wss://quarry.example.com/mcp"
-        ca_cert = "\(pinnedCA.path)"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        let profile = try loader.load()
-
-        XCTAssertEqual(profile.mode, .remote)
-        XCTAssertEqual(profile.baseURL.host, "quarry.example.com")
-        XCTAssertEqual(profile.hostDisplayName, "quarry.example.com")
-    }
-
-    func testProxyConfigRejectsUnsupportedAuthorizationHeader() throws {
-        let tempDirectory = try XCTUnwrap(tempDirectory)
-        let proxyConfig = tempDirectory.appendingPathComponent("quarry.toml")
-        try """
-        [quarry]
-        url = "ws://localhost:8420/mcp"
-
-        [quarry.headers]
-        Authorization = "Basic abc123"
-        """.write(to: proxyConfig, atomically: true, encoding: .utf8)
-
-        let loader = ConnectionProfileLoader(
-            proxyConfigURL: proxyConfig,
-            localCAURL: tempDirectory.appendingPathComponent("unused-local-ca.crt")
-        )
-
-        XCTAssertThrowsError(try loader.load()) { error in
-            guard case .invalidAuthorizationHeader = error as? ConnectionProfileLoaderError else {
-                XCTFail("Expected invalidAuthorizationHeader, got \(error)")
-                return
-            }
-        }
-    }
-
     // MARK: Private
 
     private var tempDirectory: URL?
+
+    /// Write a `ca.crt` into the temp dir and return its URL.
+    private func writeLocalCA() throws -> URL {
+        let temp = try XCTUnwrap(tempDirectory)
+        let localCA = temp.appendingPathComponent("ca.crt")
+        try "pem".write(to: localCA, atomically: true, encoding: .utf8)
+        return localCA
+    }
+
+    /// Create `<dataRoot>/<db>/` with `serve.port` (and optionally `serve.token`),
+    /// returning the data root the loader should read.
+    @discardableResult
+    private func writeRunDir(
+        db: String = "default",
+        port: String,
+        token: String?
+    ) throws -> URL {
+        let temp = try XCTUnwrap(tempDirectory)
+        let dataRoot = temp.appendingPathComponent("data")
+        let runDir = dataRoot.appendingPathComponent(db)
+        try FileManager.default.createDirectory(at: runDir, withIntermediateDirectories: true)
+        try port.write(
+            to: runDir.appendingPathComponent("serve.port"),
+            atomically: true,
+            encoding: .utf8
+        )
+        if let token {
+            try token.write(
+                to: runDir.appendingPathComponent("serve.token"),
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+        return dataRoot
+    }
 }
