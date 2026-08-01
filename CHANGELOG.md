@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `DESIGN.md` — architecture decision records (ADRs) for the client/connection design, testability posture, and TLS pinning, with rejected alternatives. README architecture diagram updated to show app-scope connection ownership.
+
+### Fixed
+
+- Fixed the app landing on "Quarry Unavailable — The operation couldn't be completed. (Swift.CancellationError error 1.)" instead of connecting. The initial connect ran inside the `ContentPanel` `.task`, which `MenuBarExtra(.window)` cancels whenever the panel window is torn down (panel close, first-open re-render). A cancelled request surfaces (via the client's `URLError.cancelled` mapping) as `CancellationError`, and the connection manager's catch-all presented that cancellation as a user-facing "Unavailable" — a dead end, because the panel's `if case .idle` guard then blocked any auto-retry. The connect now runs at app scope from `applicationDidFinishLaunching` in a `ConnectionManager`-owned task that outlives every panel, so panel teardown can no longer cancel it and the app resolves its connection at launch. `CancellationError`/`URLError.cancelled` are also caught explicitly and reset the manager to `.idle` (never `.unavailable`/`.misconfigured`), so an abandoned attempt never masquerades as a real failure.
+
 ## [0.6.1] - 2026-07-29
 
 ### Fixed

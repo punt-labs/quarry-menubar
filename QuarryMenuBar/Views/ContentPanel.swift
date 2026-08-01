@@ -18,9 +18,12 @@ struct ContentPanel: View {
         }
         .preferredColorScheme(activeThemeIsDark ? .dark : .light)
         .task {
-            if case .idle = connectionManager.state {
-                await connectionManager.refresh()
-            }
+            // Start the connect through the manager-owned task, never as this
+            // `.task`. MenuBarExtra(.window) cancels the panel's `.task` on window
+            // teardown; running the connect here directly cancelled the in-flight
+            // request and surfaced a spurious "Unavailable — CancellationError".
+            // `connectIfNeeded()` is idempotent and no-ops once connected.
+            connectionManager.connectIfNeeded()
         }
     }
 
