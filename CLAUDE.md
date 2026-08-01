@@ -185,7 +185,7 @@ Treat review feedback seriously, but do not cargo-cult it. If you decline a sugg
 Passing `make format`, `make lint`, and `make test` is necessary, not sufficient. After changing behavior:
 
 - Open the touched files and read the resulting code.
-- Launch the app or exercise the changed path against a real Quarry connection.
+- **Run the real app to its working state — this is the release gate, and nothing substitutes for it.** For any change touching connection, runtime, or UI, `make run` and drive the *actual* app through the affected flow (menu bar → **Connected** → search → open a detail view). A backend harness (`curl`/`urllib`/a Swift script hitting the daemon) or a skip-guarded live unit test verifies the *contract*, not the app's real `URLSession`/TLS/`@MainActor`/MenuBarExtra runtime flow — where bugs like a cancelled `refresh()` Task live. A passing harness or unit test **must never** be treated as the verification. If you cannot drive the menu-bar UI yourself, hand the running build to the operator for confirmation; do not declare it working, and do not release, on harness or unit-test evidence alone.
 - Compare the actual behavior with the intended behavior before declaring the work complete.
 
 ## Development Workflow
@@ -337,7 +337,7 @@ Three documents track different aspects of the project. Each has a clear trigger
 - [ ] **README updated** if user-facing behavior changed
 - [ ] **PR/FAQ updated** if product direction or risk assumptions shifted
 - [ ] **Quality gates pass**: `make format && make lint && make test`
-- [ ] **Live demo** for features: launch against a real Quarry connection and exercise the feature end-to-end
+- [ ] **Real-app run — mandatory for any connection/runtime/UI change (not just features):** `make run` and drive the *actual* app to **Connected → search → open a detail view** against a real Quarry connection. A backend harness or a skip-guarded live unit test does **not** satisfy this — it is the contract, not the running app. Confirm via the real UI or operator eyeball before opening the PR; never release on harness/unit-test evidence alone.
 - [ ] **Local review agents run on the full diff** and their findings are resolved
 - [ ] **Human IDE review** completed on the full diff
 
