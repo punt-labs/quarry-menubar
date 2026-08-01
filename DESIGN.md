@@ -76,9 +76,9 @@ in-flight `URLSession` request, `mapURLError` turned the cancel into
 `CancellationError`, and the catch-all surfaced it as "Quarry Unavailable —
 CancellationError" with the `.idle` guard blocking any retry. The Quarry 2.0
 loopback path (synchronous `serve.port`/`serve.token` reads before the awaits)
-widened the window enough to make it hit on every launch. `applicationDidFinish`
-`Launching` is the one lifecycle hook that fires once at startup independent of
-any window.
+widened the window enough to make it hit on every launch.
+`applicationDidFinishLaunching` is the one lifecycle hook that fires once at
+startup independent of any window.
 
 ### Alternatives
 
