@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-29
+
 ### Fixed
 
 - Restored connectivity against Quarry 2.0 (`quarryd`, DES-031 v2.2). Quarry 2.0 moved every engine endpoint under `/v1/` (only `/health` stays at the root) and now requires the daemon's `serve.token` bearer on loopback requests; the app was calling endpoints at the root (404) and presenting no loopback bearer (401). The client now prefixes `search`/`show`/`status`/`databases`/`documents`/`collections` with `/v1/`, and connection resolution mirrors the `quarry` CLI's `TargetResolver`: a remote `quarry.toml` login wins, otherwise the local daemon is resolved on `127.0.0.1` from `serve.port` plus the live `serve.token` in the startup database's run dir (`~/.punt-labs/quarry/data/<db>/`). A loopback `quarry.toml` falls through to the `serve.token` path. A down daemon (no `serve.port`), a present-but-unreadable/invalid `serve.port`, an unreadable/empty `serve.token`, or a broken `config.toml` each surface a distinct, clear configuration error pointing at the daemon rather than silently reading the wrong run directory. The `[default] database` name in `config.toml` is resolved the way the `quarry` CLI resolves it (absent or empty means the `default` database), tolerating an inline `# comment` and single-quoted values. TLS/host validation is unchanged (loopback still pins the local CA and dials the IPv4 literal).
