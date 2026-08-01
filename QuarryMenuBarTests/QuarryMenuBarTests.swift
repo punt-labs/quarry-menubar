@@ -19,7 +19,7 @@ final class ContentPanelTests: XCTestCase {
             switch requestURL.path {
             case "/health":
                 return jsonResponse(#"{"status":"ok","uptime_seconds":1.0}"#, url: requestURL)
-            case "/status":
+            case "/v1/status":
                 return jsonResponse(
                     """
                     {
@@ -36,7 +36,7 @@ final class ContentPanelTests: XCTestCase {
                     """,
                     url: requestURL
                 )
-            case "/databases":
+            case "/v1/databases":
                 return jsonResponse(
                     """
                     {

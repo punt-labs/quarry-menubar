@@ -347,6 +347,82 @@ final class QuarryClientNetworkTests: XCTestCase {
         XCTAssertEqual(queryDict["collection"], "research")
     }
 
+    func testEngineEndpointsUseV1Prefix() async throws {
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8420"))
+        let client = try mockClient(profile: testProfile(baseURL: baseURL))
+
+        var capturedPath: String?
+        MockURLProtocol.requestHandler = { request in
+            capturedPath = request.url?.path
+            return jsonResponse(
+                #"{"query":"hello","total_results":0,"results":[]}"#,
+                url: request.url ?? baseURL
+            )
+        }
+
+        _ = try await client.search(query: "hello")
+
+        XCTAssertEqual(capturedPath, "/v1/search")
+    }
+
+    func testStatusEndpointUsesV1Prefix() async throws {
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8420"))
+        let client = try mockClient(profile: testProfile(baseURL: baseURL))
+
+        var capturedPath: String?
+        MockURLProtocol.requestHandler = { request in
+            capturedPath = request.url?.path
+            return jsonResponse(
+                #"""
+                {"document_count":0,"collection_count":0,"chunk_count":0,
+                 "database_path":"/tmp/default/lancedb","database_size_bytes":0,
+                 "embedding_model":"m","embedding_dimension":768}
+                """#,
+                url: request.url ?? baseURL
+            )
+        }
+
+        _ = try await client.status()
+
+        XCTAssertEqual(capturedPath, "/v1/status")
+    }
+
+    func testShowEndpointUsesV1Prefix() async throws {
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8420"))
+        let client = try mockClient(profile: testProfile(baseURL: baseURL))
+
+        var capturedPath: String?
+        MockURLProtocol.requestHandler = { request in
+            capturedPath = request.url?.path
+            return jsonResponse(
+                #"{"document_name":"a.pdf","page_number":1,"text":"x"}"#,
+                url: request.url ?? baseURL
+            )
+        }
+
+        _ = try await client.show(document: "a.pdf", page: 1)
+
+        XCTAssertEqual(capturedPath, "/v1/show")
+    }
+
+    func testHealthEndpointStaysAtRoot() async throws {
+        let baseURL = try XCTUnwrap(URL(string: "http://127.0.0.1:8420"))
+        let client = try mockClient(profile: testProfile(baseURL: baseURL))
+
+        var capturedPath: String?
+        MockURLProtocol.requestHandler = { request in
+            capturedPath = request.url?.path
+            return jsonResponse(
+                #"{"status":"ok","uptime_seconds":1.0}"#,
+                url: request.url ?? baseURL
+            )
+        }
+
+        _ = try await client.health()
+
+        XCTAssertEqual(capturedPath, "/health")
+    }
+
     func testSearchRequestIncludesAuthorizationHeader() async throws {
         let baseURL = try XCTUnwrap(URL(string: "https://okinos.user.home.lab:8420"))
         let client = try mockClient(

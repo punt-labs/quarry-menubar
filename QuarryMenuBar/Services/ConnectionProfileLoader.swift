@@ -17,6 +17,8 @@ enum ConnectionProfileLoaderError: LocalizedError {
     case missingPinnedCACertificate(URL)
     case invalidAuthorizationHeader(String)
     case missingLocalCACertificate(URL)
+    case daemonNotRunning(URL)
+    case serveTokenUnreadable(URL)
 
     // MARK: Internal
 
@@ -38,6 +40,12 @@ enum ConnectionProfileLoaderError: LocalizedError {
             "Unsupported Authorization header in Quarry profile: \(value)"
         case let .missingLocalCACertificate(url):
             "Local Quarry CA certificate not found at \(url.path)."
+        case let .daemonNotRunning(url):
+            "Quarry daemon is not running — no `serve.port` at \(url.path). "
+                + "Run `quarry install` or start `quarryd`, then retry."
+        case let .serveTokenUnreadable(url):
+            "Quarry daemon's `serve.token` is missing or unreadable at \(url.path). "
+                + "Ensure `quarryd` is running (run `quarry install`)."
         }
     }
 
@@ -51,7 +59,9 @@ enum ConnectionProfileLoaderError: LocalizedError {
              .missingPinnedCACertificate,
              .invalidAuthorizationHeader:
             .proxyConfig
-        case .missingLocalCACertificate:
+        case .missingLocalCACertificate,
+             .daemonNotRunning,
+             .serveTokenUnreadable:
             .localDefault
         }
     }
@@ -66,11 +76,15 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
     init(
         fileManager: FileManager = .default,
         proxyConfigURL: URL = Self.defaultProxyConfigURL,
-        localCAURL: URL = Self.defaultLocalCAURL
+        localCAURL: URL = Self.defaultLocalCAURL,
+        dataRootURL: URL = Self.defaultDataRootURL,
+        quarryConfigURL: URL = Self.defaultQuarryConfigURL
     ) {
         self.fileManager = fileManager
         self.proxyConfigURL = proxyConfigURL
         self.localCAURL = localCAURL
+        self.dataRootURL = dataRootURL
+        self.quarryConfigURL = quarryConfigURL
     }
 
     // MARK: Internal
@@ -86,12 +100,45 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         .appendingPathComponent("tls")
         .appendingPathComponent("ca.crt")
 
+    /// Root of the daemon's per-database run directories (`~/.punt-labs/quarry/data`).
+    /// Each database's `serve.port` / `serve.token` sidecars live beside its
+    /// LanceDB data under `<dataRoot>/<db>/` (mirrors quarry's `Settings.quarry_root`).
+    static let defaultDataRootURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".punt-labs")
+        .appendingPathComponent("quarry")
+        .appendingPathComponent("data")
+
+    /// The daemon's persistent config (`~/.punt-labs/quarry/config.toml`), whose
+    /// `[default] database` names the startup database whose run dir holds the
+    /// live `serve.token` (mirrors quarry's `Settings.read_default_db`).
+    static let defaultQuarryConfigURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".punt-labs")
+        .appendingPathComponent("quarry")
+        .appendingPathComponent("config.toml")
+
+    /// Resolve the daemon target, mirroring quarry's `TargetResolver.resolve`
+    /// precedence (`quarry/client/resolver.py`) minus the `QUARRY_URL` env tier:
+    ///
+    /// 1. a stored remote login (`quarry.toml`) whose host is genuinely remote;
+    /// 2. otherwise the local daemon on literal loopback, authenticated with the
+    ///    live `serve.token` read from the startup database's run directory.
+    ///
+    /// A `quarry.toml` pointing at a loopback host is intentionally ignored here
+    /// and falls through to the loopback path: the daemon now requires its live
+    /// `serve.token` on every loopback request (DES-031 v2.2 R4), and that token
+    /// is not stored in the toml. Reading it live from the run dir is the only
+    /// correct source (it rotates on every daemon restart).
+    ///
+    /// The `QUARRY_URL`/`QUARRY_TOKEN` env tier that quarry's CLI honors is
+    /// deliberately not implemented: the app launches via `open`, which does not
+    /// propagate the shell environment, so an env tier would be an untestable,
+    /// never-exercised path in this GUI context.
     func load() throws -> ConnectionProfile {
         if fileManager.fileExists(atPath: proxyConfigURL.path),
-           let profile = try loadProxyConfigProfile() {
+           let profile = try loadRemoteProxyProfile() {
             return profile
         }
-        return try loadDefaultLocalProfile()
+        return try loadLoopbackProfile()
     }
 
     // MARK: Private
@@ -112,8 +159,20 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
     private let fileManager: FileManager
     private let proxyConfigURL: URL
     private let localCAURL: URL
+    private let dataRootURL: URL
+    private let quarryConfigURL: URL
 
-    private func loadProxyConfigProfile() throws -> ConnectionProfile? {
+    /// Build a `.remote` profile from `quarry.toml`, or return `nil` to fall
+    /// through to the loopback path.
+    ///
+    /// Returns `nil` when the file has no usable `[quarry].url`, or when that URL
+    /// names a loopback host — a loopback login carries no usable credential now
+    /// that the daemon authenticates loopback with its live `serve.token`, so the
+    /// loopback path (which reads that token) is authoritative. A `[quarry]`
+    /// section with a *missing* url throws `missingProxyURL`: that is a
+    /// half-written remote login the operator should see, not silently demote to
+    /// local. A malformed url throws `invalidProxyURL` for the same reason.
+    private func loadRemoteProxyProfile() throws -> ConnectionProfile? {
         let contents: String
         do {
             contents = try String(contentsOf: proxyConfigURL, encoding: .utf8)
@@ -144,7 +203,10 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         // brackets only for host comparison and display; the value assigned back to
         // `URLComponents.host` must keep its brackets, or a remote IPv6 literal fails to build.
         let bareHost = strippingIPv6Brackets(parsedHost)
-        let isLoopback = isLocalHost(bareHost)
+        // A loopback login is not a remote target: fall through to serve.token.
+        guard !isLocalHost(bareHost) else {
+            return nil
+        }
 
         let baseScheme: String
         switch scheme {
@@ -161,24 +223,24 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
 
         var baseComponents = URLComponents()
         baseComponents.scheme = baseScheme
-        // Loopback dials the IPv4 literal directly; every other host (including remote IPv6
-        // literals) keeps the bracketed form Foundation parsed so the URL still builds.
-        baseComponents.host = isLoopback ? "127.0.0.1" : parsedHost
+        // Remote hosts (including IPv6 literals) keep the bracketed form Foundation
+        // parsed so the URL still builds; the toml URL's path (e.g. `/mcp`) is dropped
+        // so the client can address `/v1/...` at the server root.
+        baseComponents.host = parsedHost
         baseComponents.port = components.port ?? 8420
 
         guard let baseURL = baseComponents.url else {
             throw ConnectionProfileLoaderError.invalidProxyURL(urlString)
         }
 
-        let mode: ConnectionMode = isLoopback ? .local : .remote
-        if mode == .remote, baseScheme != "https" {
+        if baseScheme != "https" {
             throw ConnectionProfileLoaderError.insecureRemoteProxyURL(urlString)
         }
 
-        let caURL = try resolvedCAURL(path: config.caCertPath, required: baseScheme == "https")
+        let caURL = try resolvedCAURL(path: config.caCertPath, required: true)
         let token = try parseBearerToken(from: config.authorizationHeader)
         return ConnectionProfile(
-            mode: mode,
+            mode: .remote,
             origin: .proxyConfig,
             baseURL: baseURL,
             caCertificateURL: caURL,
@@ -187,13 +249,31 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
         )
     }
 
-    private func loadDefaultLocalProfile() throws -> ConnectionProfile {
+    /// Build the local-daemon profile on literal loopback, authenticated with the
+    /// daemon's live `serve.token`.
+    ///
+    /// Mirrors quarry's `TargetResolver._loopback_default` (`resolver.py`): the
+    /// bound port comes from `serve.port` and the bearer from `serve.token`, both
+    /// read from the startup database's run directory. The connection targets the
+    /// `127.0.0.1` literal — never the ambiguous `localhost` name a dual-stack
+    /// resolver could redirect — and pins the local CA. Fails closed: a missing
+    /// `serve.port` (daemon down) or an unreadable/empty `serve.token` surfaces a
+    /// clear `.misconfigured` error rather than a bare 401 far from its cause.
+    private func loadLoopbackProfile() throws -> ConnectionProfile {
+        let runDir = dataRootURL.appendingPathComponent(activeDatabaseName())
+        let portURL = runDir.appendingPathComponent("serve.port")
+        let tokenURL = runDir.appendingPathComponent("serve.token")
+
+        let port = try loopbackPort(portURL)
+        let token = try serveToken(tokenURL)
+
         guard fileManager.fileExists(atPath: localCAURL.path) else {
             throw ConnectionProfileLoaderError.missingLocalCACertificate(localCAURL)
         }
 
-        guard let baseURL = URL(string: "https://127.0.0.1:8420") else {
-            throw ConnectionProfileLoaderError.invalidProxyURL("https://127.0.0.1:8420")
+        let baseString = "https://127.0.0.1:\(port)"
+        guard let baseURL = URL(string: baseString) else {
+            throw ConnectionProfileLoaderError.invalidProxyURL(baseString)
         }
 
         return ConnectionProfile(
@@ -201,9 +281,84 @@ struct ConnectionProfileLoader: ConnectionProfileLoading {
             origin: .localDefault,
             baseURL: baseURL,
             caCertificateURL: localCAURL,
-            authToken: nil,
+            authToken: token,
             hostDisplayName: "localhost"
         )
+    }
+
+    /// Read the daemon's bound port from `serve.port`, or fail closed.
+    private func loopbackPort(_ portURL: URL) throws -> Int {
+        guard fileManager.fileExists(atPath: portURL.path),
+              let raw = try? String(contentsOf: portURL, encoding: .utf8),
+              let port = Int(raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              port > 0
+        else {
+            throw ConnectionProfileLoaderError.daemonNotRunning(portURL)
+        }
+        return port
+    }
+
+    /// Read the daemon's live loopback bearer from `serve.token`, or fail closed.
+    private func serveToken(_ tokenURL: URL) throws -> String {
+        guard fileManager.fileExists(atPath: tokenURL.path),
+              let raw = try? String(contentsOf: tokenURL, encoding: .utf8)
+        else {
+            throw ConnectionProfileLoaderError.serveTokenUnreadable(tokenURL)
+        }
+        let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            throw ConnectionProfileLoaderError.serveTokenUnreadable(tokenURL)
+        }
+        return token
+    }
+
+    /// Name the startup database whose run dir holds the live `serve.token`.
+    ///
+    /// Mirrors quarry's `Settings.read_default_db` (`config.py`): read
+    /// `config.toml`'s `[default] database`; if present and not the literal
+    /// `"default"`, that names the run dir. Absent, unreadable, or `"default"`
+    /// falls back to `"default"`. A name containing a path separator is rejected
+    /// (it would escape the data root) and falls back to `"default"`.
+    private func activeDatabaseName() -> String {
+        guard fileManager.fileExists(atPath: quarryConfigURL.path),
+              let contents = try? String(contentsOf: quarryConfigURL, encoding: .utf8)
+        else {
+            return "default"
+        }
+        guard let name = parseDefaultDatabase(contents),
+              name != "default",
+              !name.contains("/"),
+              !name.contains("\\"),
+              name != ".",
+              name != ".."
+        else {
+            return "default"
+        }
+        return name
+    }
+
+    /// Extract `[default] database = "..."` from a `config.toml` body, or `nil`.
+    private func parseDefaultDatabase(_ contents: String) -> String? {
+        var inDefaultSection = false
+        for rawLine in contents.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, !line.hasPrefix("#") else { continue }
+            if line == "[default]" {
+                inDefaultSection = true
+                continue
+            }
+            if line.hasPrefix("[") {
+                inDefaultSection = false
+                continue
+            }
+            guard inDefaultSection, let equalsIndex = line.firstIndex(of: "=") else { continue }
+            let key = line[..<equalsIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard key == "database" else { continue }
+            let valueSlice = line[line.index(after: equalsIndex)...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return try? parseQuotedString(valueSlice)
+        }
+        return nil
     }
 
     private func parseProxyConfig(_ contents: String) throws -> ProxyConfig {

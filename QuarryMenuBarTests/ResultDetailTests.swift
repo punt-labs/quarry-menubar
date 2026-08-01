@@ -17,7 +17,7 @@ final class ResultDetailTests: XCTestCase {
         MockURLProtocol.requestHandler = { request in
             let requestURL = try XCTUnwrap(request.url)
             switch requestURL.path {
-            case "/show":
+            case "/v1/show":
                 return jsonResponse(
                     """
                     {
@@ -54,7 +54,7 @@ final class ResultDetailTests: XCTestCase {
         MockURLProtocol.requestHandler = { request in
             let requestURL = try XCTUnwrap(request.url)
             switch requestURL.path {
-            case "/show":
+            case "/v1/show":
                 let escaped = showText.replacingOccurrences(of: "\n", with: "\\n")
                 return jsonResponse(
                     """
@@ -90,7 +90,7 @@ final class ResultDetailTests: XCTestCase {
         MockURLProtocol.requestHandler = { request in
             let requestURL = try XCTUnwrap(request.url)
             switch requestURL.path {
-            case "/show":
+            case "/v1/show":
                 return jsonResponse(
                     """
                     {
@@ -121,7 +121,7 @@ final class ResultDetailTests: XCTestCase {
         MockURLProtocol.requestHandler = { request in
             let requestURL = try XCTUnwrap(request.url)
             switch requestURL.path {
-            case "/show":
+            case "/v1/show":
                 return jsonResponse(#"{"error":"detail unavailable"}"#, statusCode: 404, url: requestURL)
             default:
                 XCTFail("Unexpected request: \(requestURL.absoluteString)")

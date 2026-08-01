@@ -23,7 +23,7 @@ final class ConnectionManagerTests: XCTestCase {
             switch requestURL.path {
             case "/health":
                 return jsonResponse(#"{"status":"ok","uptime_seconds":1.5}"#, url: requestURL)
-            case "/status":
+            case "/v1/status":
                 return jsonResponse(
                     """
                     {
@@ -40,7 +40,7 @@ final class ConnectionManagerTests: XCTestCase {
                     """,
                     url: requestURL
                 )
-            case "/databases":
+            case "/v1/databases":
                 return jsonResponse(
                     """
                     {
@@ -260,9 +260,9 @@ final class ConnectionManagerTests: XCTestCase {
         switch requestURL.path {
         case "/health":
             return jsonResponse(#"{"status":"ok","uptime_seconds":1.0}"#, url: requestURL)
-        case "/status":
+        case "/v1/status":
             return statusResponse(databaseName: databaseName, url: requestURL)
-        case "/databases":
+        case "/v1/databases":
             return databasesResponse(databaseName: databaseName, url: requestURL)
         default:
             XCTFail("Unexpected request: \(requestURL.absoluteString)")
@@ -319,7 +319,7 @@ final class ConnectionManagerTests: XCTestCase {
         switch requestURL.path {
         case "/health":
             return jsonResponse(#"{"status":"ok","uptime_seconds":1.0}"#, url: requestURL)
-        case "/status":
+        case "/v1/status":
             return jsonResponse(
                 """
                 {
@@ -336,7 +336,7 @@ final class ConnectionManagerTests: XCTestCase {
                 """,
                 url: requestURL
             )
-        case "/databases":
+        case "/v1/databases":
             return jsonResponse(
                 """
                 {
