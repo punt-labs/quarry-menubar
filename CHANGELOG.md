@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-01
+
 ### Added
 
 - `DESIGN.md` — architecture decision records (ADRs) for the client/connection design, testability posture, and TLS pinning, with rejected alternatives. README architecture diagram updated to show app-scope connection ownership.
