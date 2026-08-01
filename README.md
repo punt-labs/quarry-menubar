@@ -154,16 +154,19 @@ The Xcode project is generated from `project.yml` and gitignored. New `.swift` f
 
 ## Architecture
 
-The app is a Quarry client. It resolves the active connection, talks to Quarry over HTTP(S), and adapts the UI to local vs remote capabilities.
+The app is a Quarry client — a Swift port of quarry's client tier. It resolves the active connection, talks to Quarry over HTTP(S), and adapts the UI to local vs remote capabilities. Design decisions (with rejected alternatives) are recorded in [`DESIGN.md`](DESIGN.md).
 
 ```text
-QuarryMenuBarApp
-  -> ConnectionProfileLoader (remote quarry.toml, else loopback serve.port/serve.token)
-  -> ConnectionManager (resolves profile, probes health/status/databases)
-  -> QuarryClient (HTTP(S) + Bearer auth + pinned CA)
+QuarryMenuBarApp / AppDelegate           # owns the app-lifetime ConnectionManager;
+  -> ConnectionManager                   #   connects once at applicationDidFinishLaunching
+       (owns the connect Task at app scope — NOT a view's .task, which MenuBarExtra cancels)
+  -> ConnectionProfileLoader             # remote quarry.toml, else loopback serve.port/serve.token
+  -> QuarryClient (HTTP(S) /v1 + Bearer auth + pinned CA)
   -> SearchViewModel (debounced search via QuarryClient)
-  -> ContentPanel (routes UI by connection state)
+  -> ContentPanel (renders by connection state; delegates connect/refresh to ConnectionManager)
 ```
+
+Connection ownership lives at app scope, not in a view — see [`DESIGN.md`](DESIGN.md) ADR-002 (why) and ADR-001 (the thin-views/testability principle it follows).
 
 Dependencies:
 
