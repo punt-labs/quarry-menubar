@@ -15,7 +15,12 @@ import XCTest
 ///     xcodebuild test -scheme QuarryMenuBar -destination 'platform=macOS' \
 ///       -only-testing:QuarryMenuBarTests/LiveDaemonIntegrationTests
 ///     rm ~/.qmb-live-integration
+///
+/// Diagnostics are recorded as `XCTAttachment`s (visible in the test report),
+/// not printed to stdout.
 final class LiveDaemonIntegrationTests: XCTestCase {
+
+    // MARK: Internal
 
     func testResolvesLoopbackAndReachesV1Endpoints() async throws {
         let marker = (NSHomeDirectory() as NSString)
@@ -27,31 +32,39 @@ final class LiveDaemonIntegrationTests: XCTestCase {
 
         let loader = ConnectionProfileLoader()
         let profile = try loader.load()
-        print(
-            "LIVE profile: mode=\(profile.mode.rawValue) "
-                + "base=\(profile.baseURL.absoluteString) tls=\(profile.usesTLS) "
-                + "tokenPresent=\(profile.authToken != nil) "
+        record(
+            "profile",
+            "mode=\(profile.mode.rawValue) base=\(profile.baseURL.absoluteString) "
+                + "tls=\(profile.usesTLS) tokenPresent=\(profile.authToken != nil) "
                 + "ca=\(profile.caCertificateURL?.path ?? "nil")"
+        )
+
+        // This test covers the loopback (serve.port/serve.token) path. When a
+        // remote quarry.toml is active the loader resolves a remote target, so
+        // the loopback assertions below would not apply — skip rather than pass
+        // on the wrong path.
+        try XCTSkipUnless(
+            profile.mode == .local,
+            "Active quarry.toml resolves a remote target; this test covers the loopback path."
         )
 
         let client = try QuarryClient(profile: profile)
 
         let health = try await client.health()
-        print("LIVE /health -> status=\(health.status)")
+        record("health", "status=\(health.status)")
 
         let status = try await client.status()
-        print(
-            "LIVE /v1/status -> documents=\(status.documentCount) "
-                + "collections=\(status.collectionCount) provider=\(status.provider ?? "nil")"
+        record(
+            "v1/status",
+            "documents=\(status.documentCount) collections=\(status.collectionCount) "
+                + "provider=\(status.provider ?? "nil")"
         )
 
         let databases = try await client.databases()
-        print("LIVE /v1/databases -> total=\(databases.totalDatabases)")
+        record("v1/databases", "total=\(databases.totalDatabases)")
 
         let search = try await client.search(query: "quarry", limit: 3)
-        print(
-            "LIVE /v1/search -> total=\(search.totalResults) returned=\(search.results.count)"
-        )
+        record("v1/search", "total=\(search.totalResults) returned=\(search.results.count)")
 
         XCTAssertFalse(
             profile.authToken?.isEmpty ?? true,
@@ -65,11 +78,24 @@ final class LiveDaemonIntegrationTests: XCTestCase {
                 page: first.pageNumber,
                 collection: first.collection
             )
-            print(
-                "LIVE /v1/show -> document=\(page.documentName) page=\(page.pageNumber) "
-                    + "textChars=\(page.text.count)"
+            record(
+                "v1/show",
+                "document=\(page.documentName) page=\(page.pageNumber) textChars=\(page.text.count)"
             )
             XCTAssertEqual(page.documentName, first.documentName)
         }
+    }
+
+    // MARK: Private
+
+    /// Attach one diagnostic line to the test report, keyed by *label*.
+    ///
+    /// Recorded incrementally (not batched at the end) so a step that throws
+    /// still leaves the diagnostics gathered before it in the report.
+    private func record(_ label: String, _ message: String) {
+        let attachment = XCTAttachment(string: message)
+        attachment.name = "LIVE \(label)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
