@@ -49,3 +49,6 @@ Package.resolved
 
 # LanceDB vector store (quarry index cruft)
 lancedb/
+
+# Quarry session-transcript captures (pkit-kcps)
+.punt-labs/quarry/captures/
