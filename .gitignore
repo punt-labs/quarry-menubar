@@ -33,9 +33,8 @@ Package.resolved
 # Environment
 .env
 
-# Claude Code local settings
-.claude/
-!.claude/settings.json
+# Claude Code local settings (per-machine, may contain paths/tokens)
+.claude/settings.local.json
 
 # Test artifacts
 *.xcresult
