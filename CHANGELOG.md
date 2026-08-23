@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-23
+
 ### Fixed
 
 - Restored connectivity against Quarry 3.x. Quarry 3.0 dropped three size fields the app decoded as hard requirements: `GET /v1/status` no longer emits `database_size_bytes`, and `GET /v1/databases` entries no longer carry `size_bytes` or `size_description` (the daemon deliberately reports no on-disk size, since producing it requires an O(seconds) tree walk any client could trigger). Because `StatusResponse.databaseSizeBytes`, `DatabaseSummary.sizeBytes`, and `DatabaseSummary.sizeDescription` were non-optional, JSON decoding threw during the connect handshake and the app dead-ended on "Quarry Unavailable". The three fields are now optional, so the size-less 3.x payloads decode and the app connects; no UI surfaced these values, so nothing is displayed differently.
