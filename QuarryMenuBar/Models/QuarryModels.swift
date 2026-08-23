@@ -155,7 +155,7 @@ struct StatusResponse: Codable, Sendable {
     let chunkCount: Int
     let registeredDirectories: Int?
     let databasePath: String
-    let databaseSizeBytes: Int
+    let databaseSizeBytes: Int?
     let embeddingModel: String
     let provider: String?
     let embeddingDimension: Int
@@ -187,8 +187,8 @@ struct DatabaseSummary: Codable, Identifiable, Equatable, Sendable {
 
     let name: String
     let documentCount: Int
-    let sizeBytes: Int
-    let sizeDescription: String
+    let sizeBytes: Int?
+    let sizeDescription: String?
 
     var id: String {
         name

@@ -16,8 +16,8 @@
 class QuarryMenubar < Formula
   desc "Menu bar app for Quarry document search"
   homepage "https://github.com/punt-labs/quarry-menubar"
-  url "https://github.com/punt-labs/quarry-menubar/releases/download/v0.6.2/QuarryMenuBar-v0.6.2-macos-universal.zip"
-  sha256 "89e5d1289729a468dddf894c9cf3d903e1076e0c2ce54caa0df6ec8f2b565090"
+  url "https://github.com/punt-labs/quarry-menubar/releases/download/v0.6.3/QuarryMenuBar-v0.6.3-macos-universal.zip"
+  sha256 "8430240a01f8226faaaea98bb91b4ae596e814720b49dfaded68cab446c3ddbd"
   license "MIT"
 
   depends_on macos: :sonoma
