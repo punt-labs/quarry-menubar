@@ -21,7 +21,7 @@ The app does **not** manage Quarry itself. It follows Quarry's current connectio
 - Use the **remote** profile in `~/.punt-labs/mcp-proxy/quarry.toml` when it names a non-loopback host (its `url`, pinned `ca_cert`, and `Authorization: Bearer` token)
 - Otherwise connect to the **local daemon** on loopback: read the bound port from `serve.port` and the live bearer from `serve.token` in the daemon's startup-database run dir (`~/.punt-labs/quarry/data/<db>/`, `<db>` from `config.toml`'s `[default] database`, else `default`), pinning the CA in `~/.punt-labs/quarry/tls/ca.crt`
 
-Quarry 2.0 serves every engine endpoint under `/v1/` (only `/health` stays at the root) and requires the daemon's `serve.token` on loopback requests. If `quarryd` is not running (no `serve.port`) or its `serve.token` is unreadable, the app shows a configuration error pointing at the daemon rather than a bare failure.
+Quarry serves every engine endpoint under `/v1/` (only `/health` stays at the root) and requires the daemon's `serve.token` on loopback requests. If `quarryd` is not running (no `serve.port`) or its `serve.token` is unreadable, the app shows a configuration error pointing at the daemon rather than a bare failure.
 
 ## Install via Homebrew
 
