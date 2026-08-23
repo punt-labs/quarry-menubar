@@ -153,6 +153,50 @@ final class QuarryModelTests: XCTestCase {
         ])
     }
 
+    func testStatusResponseDecodesWithoutDatabaseSizeBytes() throws {
+        // quarry 3.x removed `database_size_bytes` from GET /v1/status
+        // (src/quarry/daemon/routes/meta.py). The absent field must decode to nil,
+        // not throw — a decode failure here aborts the whole connect handshake.
+        let json = """
+        {
+            "document_count": 5,
+            "collection_count": 2,
+            "chunk_count": 100,
+            "registered_directories": 2,
+            "database_path": "/home/user/.punt-labs/quarry/data/default/lancedb",
+            "embedding_model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+            "provider": "CPUExecutionProvider (fast)",
+            "embedding_dimension": 768
+        }
+        """
+        let decoded = try JSONDecoder().decode(
+            StatusResponse.self,
+            from: XCTUnwrap(json.data(using: .utf8))
+        )
+        XCTAssertNil(decoded.databaseSizeBytes)
+        XCTAssertEqual(decoded.documentCount, 5)
+    }
+
+    func testDatabasesResponseDecodesWithoutSizeFields() throws {
+        // quarry 3.x GET /v1/databases per-entry emits only {name, document_count}
+        // (still wrapped in {total_databases, databases}); the DatabaseInfo contract
+        // (src/quarry/api/databases.py) deliberately rejects size_bytes. Both size
+        // fields must decode to nil, not throw.
+        let json = """
+        {"total_databases": 1, "databases": [{"name": "default", "document_count": 7}]}
+        """
+        let decoded = try JSONDecoder().decode(
+            DatabasesResponse.self,
+            from: XCTUnwrap(json.data(using: .utf8))
+        )
+        XCTAssertEqual(decoded.totalDatabases, 1)
+        XCTAssertEqual(decoded.databases.count, 1)
+        XCTAssertEqual(decoded.databases[0].name, "default")
+        XCTAssertEqual(decoded.databases[0].documentCount, 7)
+        XCTAssertNil(decoded.databases[0].sizeBytes)
+        XCTAssertNil(decoded.databases[0].sizeDescription)
+    }
+
     func testShowPageResponseDecoding() throws {
         let json = """
         {

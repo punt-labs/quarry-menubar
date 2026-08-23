@@ -88,7 +88,56 @@ final class ConnectionManagerConnectTests: XCTestCase {
         XCTAssertEqual(loadCount, 1, "connectIfNeeded must not re-run once connected")
     }
 
+    func testConnectReachesConnectedWithQuarry3SizelessShapes() async throws {
+        // Regression for the quarry 3.x break: GET /v1/status omits
+        // database_size_bytes and GET /v1/databases entries omit size_bytes /
+        // size_description. Both decodes must succeed so the connect handshake
+        // (ConnectionManager.performRefresh awaits status + databases) reaches
+        // .connected rather than aborting to .unavailable.
+        let profile = try testProfile(baseURL: XCTUnwrap(URL(string: "http://127.0.0.1:8420")))
+        let manager = ConnectionManager(
+            profileLoader: StubProfileLoader { profile },
+            clientFactory: { try mockClient(profile: $0) }
+        )
+        MockURLProtocol.requestHandler = quarry3Handler
+
+        manager.connectIfNeeded()
+        try await waitFor { manager.state == .connected }
+
+        XCTAssertEqual(manager.state, .connected)
+        XCTAssertNotNil(manager.searchViewModel)
+        XCTAssertEqual(manager.databases.count, 1)
+        XCTAssertNil(manager.databases.first?.sizeBytes)
+        XCTAssertNil(manager.status?.databaseSizeBytes)
+    }
+
     // MARK: Private
+
+    private var quarry3StatusJSON: String {
+        // quarry 3.x GET /v1/status — no database_size_bytes.
+        """
+        {
+            "document_count": 7,
+            "collection_count": 1,
+            "chunk_count": 42,
+            "registered_directories": 0,
+            "database_path": "/Users/test/.punt-labs/quarry/data/default/lancedb",
+            "embedding_model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+            "provider": "CPUExecutionProvider (fast)",
+            "embedding_dimension": 768
+        }
+        """
+    }
+
+    private var quarry3DatabasesJSON: String {
+        // quarry 3.x GET /v1/databases — entries carry no size fields.
+        """
+        {
+            "total_databases": 1,
+            "databases": [{"name": "default", "document_count": 7}]
+        }
+        """
+    }
 
     private var minimalStatusJSON: String {
         """
@@ -129,6 +178,21 @@ final class ConnectionManagerConnectTests: XCTestCase {
             return jsonResponse(minimalStatusJSON, url: requestURL)
         case "/v1/databases":
             return jsonResponse(minimalDatabasesJSON, url: requestURL)
+        default:
+            XCTFail("Unexpected request: \(requestURL.absoluteString)")
+            return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
+        }
+    }
+
+    private func quarry3Handler(request: URLRequest) throws -> (Data, HTTPURLResponse) {
+        let requestURL = try XCTUnwrap(request.url)
+        switch requestURL.path {
+        case "/health":
+            return jsonResponse(#"{"status":"ok","uptime_seconds":1.0}"#, url: requestURL)
+        case "/v1/status":
+            return jsonResponse(quarry3StatusJSON, url: requestURL)
+        case "/v1/databases":
+            return jsonResponse(quarry3DatabasesJSON, url: requestURL)
         default:
             XCTFail("Unexpected request: \(requestURL.absoluteString)")
             return jsonResponse(#"{"error":"unexpected"}"#, statusCode: 500, url: requestURL)
