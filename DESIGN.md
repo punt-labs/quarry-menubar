@@ -276,3 +276,52 @@ a user-visible failure.
 
 Rely on manual re-verification each quarry release. Rejected — that is exactly
 what failed here.
+
+---
+
+## ADR-009: Answer card: explicit trigger, daemon-owned synthesis, no model settings in the app
+
+**Status:** Proposed. Depends on quarry DES-059 (`GET /v1/answer`).
+
+### Decision
+
+The menu bar can ask the connected quarryd for a short cited answer to the
+current query. The daemon does the synthesis (quarry DES-059); the app only
+calls `GET /v1/answer` and renders the result.
+
+1. **Explicit trigger.** Command-Return or an "Answer" button. Search-as-you-type
+   never calls the model.
+2. **Card above the results.** Plain text, each valid `[n]` a link that selects
+   `results[n-1]` and opens the existing `ResultDetail`. A caption names the
+   endpoint host and model, so the user always sees where the passages went.
+3. **Cancel on change.** A query or filter change cancels the answer task and
+   resets the card; a reply for an older generation is dropped, the same guard
+   search uses. Closing the request lets the daemon stop the model call.
+4. **No model settings in the app.** No endpoint, model, or key. The app reads
+   `status.synthesis` from whichever daemon it is connected to, local or remote.
+   An older daemon without that field hides the button. `unconfigured` or
+   `invalid` keeps the button and shows the daemon's help lines in the card.
+5. **Same transport as search.** The existing bearer token and pinned TLS
+   session (ADR-006), a longer request timeout for this call only, and the call
+   added to `QuarryClientProtocol` (ADR-004) so tests use a fake (ADR-007).
+   `AnswerResponse` and `SynthesisStatus` decoding is checked against fixtures
+   from quarry's `docs/openapi.json` (ADR-008).
+
+### Why
+
+Synthesis in the daemon gives local and remote connections the same feature
+with one configuration, kept on the daemon host. The app stays a pure quarry
+client. An explicit trigger keeps search instant and model cost under the
+user's control.
+
+### Alternatives
+
+1. **Call a model endpoint from the app.** Rejected: the app would hold keys and
+   endpoint settings, and remote-daemon users would configure a model per
+   client.
+2. **Answer on every keystroke.** Rejected: a small local model takes seconds,
+   and partial queries waste calls.
+3. **Hide the feature when the daemon is not configured.** Rejected: the operator
+   wants a helpful setup message, not a missing button.
+4. **Render the answer as Markdown.** Deferred: plain text with citation links is
+   enough for a five-sentence answer and avoids rendering model output as markup.
