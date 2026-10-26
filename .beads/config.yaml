@@ -25,7 +25,7 @@ directory:
 issue-prefix: qmb
 
 # Pull only Linear issues labelled for this repo (needs bd with punt-labs/beads#7).
-linear.pull_label: repo:quarry-menubar
+linear.pull_label: repo:qmb
 
 # Source of truth is the central Hosted DoltDB. Local Dolt-native backups
 # and auto-exported JSONL views are noise that creates stale-state
