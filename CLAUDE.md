@@ -375,16 +375,13 @@ A PR opened before the outer loop is clean is a process failure, not a "draft fo
 
 ### Code Review Flow
 
-Do **not** merge immediately after creating a PR. Expect **2–6 review cycles** before merging.
+PR review follows punt-kit/standards/pr-review.md: local review (qodo review + silent-failure-hunter + code-reviewer) before the PR, then Qodo and Bugbot once at open, at most two rounds, Copilot only on request.
 
 1. **Create PR** — after the outer loop above is clean, push branch and open the PR via `mcp__github__create_pull_request`. Prefer MCP GitHub tools over `gh` CLI.
-2. **Request Copilot review** — use `mcp__github__request_copilot_review`.
-3. **Watch for feedback in the background** — `gh pr checks <number> --watch` in a background task or separate session. Do not stop waiting. Copilot and Bugbot may take 1–3 minutes after CI completes.
-4. **Read all feedback** via MCP: `mcp__github__pull_request_read` with `get_reviews` and `get_review_comments`.
-5. **Take every comment seriously.** Do not dismiss feedback as "unrelated to the change" or "pre-existing." If you disagree, explain why in a reply.
-6. **Fix and re-push** — commit fixes, push, re-run quality gates.
-7. **Repeat steps 3–6** until the latest review is **uneventful** — zero new comments, all checks green.
-8. **Merge only when the last review was clean** — use `mcp__github__merge_pull_request` (not `gh pr merge`).
+2. **Read all feedback** via MCP: `mcp__github__pull_request_read` with `get_reviews` and `get_review_comments`.
+3. **Take every comment seriously.** There is no such thing as "pre-existing" or "unrelated to this change" — if you can see it, you own it. If you disagree, explain why in a reply.
+4. **Fix once per round** — commit the fixes, run local review on the fix diff, push once, re-run quality gates.
+5. **Merge when the gate is met** — CI green, zero unresolved threads, no unaddressed findings. Use `mcp__github__merge_pull_request` (not `gh pr merge`).
 
 ### Session Close Protocol
 
