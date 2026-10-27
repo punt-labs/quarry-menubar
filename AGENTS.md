@@ -56,7 +56,7 @@ Follow the protocol in CLAUDE.md. The short version:
 - NEVER say "ready to push when you are" — YOU must push
 - If push fails, resolve and retry until it succeeds
 
-**PR workflow (see CLAUDE.md):** Before opening a PR, run local review agents on the full diff, complete the live demo, and ensure quality gates pass. Then open the PR, trigger GitHub Copilot review, address valid feedback, and merge only after the latest review is clean.
+**PR workflow (see CLAUDE.md):** Before opening a PR, run local review agents on the full diff, complete the live demo, and ensure quality gates pass. Then open the PR; review follows punt-kit/standards/pr-review.md (Qodo and Bugbot once at open, at most two rounds, Copilot only on request). Address valid feedback and merge when the gate is met.
 
 ## Landing the Plane (Session Completion)
 
