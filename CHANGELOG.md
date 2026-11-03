@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Agent files for handles not on the repo's ethos team were removed. The repo
+  now has its own `quarry-menubar` team: the gstack roles plus `claude` and the
+  specialists CLAUDE.md delegates to (`adb`, `csl`, `dna`, `edt`, `mdm`, `rmh`,
+  `srn`), whose agent files stay.
 - ethos config resolves layered again so the engineering team, seeded pipelines and the claude leader identity resolve alongside the vendored gstack team
 
 ## [0.6.3] - 2026-08-23
