@@ -435,3 +435,4 @@ Use the `standard` pipeline for new views, new endpoints, or connection-model ch
 ## Scratch Files
 
 Use `.tmp/` at the project root for scratch and temporary files — never `/tmp`. The `TMPDIR` environment variable is set via `.envrc` so that `tempfile` and subprocesses automatically use it. Contents are gitignored; only `.gitkeep` is tracked.
+@.punt-labs/ethos/CLAUDE.md
