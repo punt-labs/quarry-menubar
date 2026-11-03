@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
   `resolution: repo-only`, so a fresh clone resolves its ethos identities
   without the retired team-registry submodule or a global store.
 
+### Fixed
+
+- ethos config resolves layered again so the engineering team, seeded pipelines and the claude leader identity resolve alongside the vendored gstack team
+
 ## [0.6.3] - 2026-08-23
 
 ### Fixed
