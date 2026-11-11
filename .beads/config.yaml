@@ -17,6 +17,12 @@
 # `repo:qmb` label. The label is backfilled in the Hosted DoltDB.
 # Note: bd 1.0.4's `bd ready` does NOT honor directory.labels — use
 # `bd ready --label-any repo:qmb` until upstream fixes that.
+# Beads mirrors Linear (the planning source of truth). issue-prefix names
+# pulled-in beads; linear.pull_label scopes pulls to this repo's issues so a
+# bulk/auto pull never imports the whole PL team into quarry-menubar.
+issue-prefix: qmb
+linear.pull_label: repo:qmb
+
 directory:
   labels:
     quarry-menubar: repo:qmb
