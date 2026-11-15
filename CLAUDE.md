@@ -196,7 +196,7 @@ Passing `make format`, `make lint`, and `make test` is necessary, not sufficient
 
 ### Issue Tracking with Linear
 
-Linear is the tracker of record for this project. Read `.punt-labs/punt/CLAUDE.md` before planning or writing to the tracker. Create issues with the repo label and a type label. If an issue discovered here affects multiple repos or requires a standards change, file it against punt-kit instead.
+Linear is the tracker of record for this project. Read `.punt-labs/punt/CLAUDE.md` before planning or writing to the tracker. Create issues with this repo's label, `repo:qmb`, and a type label. If an issue discovered here affects multiple repos or requires a standards change, file it against punt-kit instead.
 
 | Use Linear | Use TodoWrite |
 |------------|---------------|
