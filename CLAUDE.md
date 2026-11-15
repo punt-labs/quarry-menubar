@@ -8,7 +8,7 @@ I am a principal engineer. Every change I make leaves the codebase in a better s
 
 This is a **sub-project** of [quarry](https://github.com/punt-labs/quarry) (`../quarry`). Quarry is a Python CLI/MCP server for OCR document search backed by LanceDB. This repo is the macOS menu bar companion app — a native Swift/SwiftUI frontend that talks to Quarry over the current connection model (local TLS on `localhost` or a configured remote server).
 
-Both repos share the same development workflow conventions (branch discipline, micro-commits, session close protocol, beads issue tracking). The Python-specific standards (ruff, mypy, uv) do not apply here; the Swift equivalents (SwiftFormat, SwiftLint, xcodebuild) do.
+Both repos share the same development workflow conventions (branch discipline, micro-commits, session close protocol, Linear issue tracking). The Python-specific standards (ruff, mypy, uv) do not apply here; the Swift equivalents (SwiftFormat, SwiftLint, xcodebuild) do.
 
 ## XcodeGen Toolchain
 
@@ -194,27 +194,17 @@ Passing `make format`, `make lint`, and `make test` is necessary, not sufficient
 
 ## Development Workflow
 
-### Issue Tracking with Beads
+### Issue Tracking with Linear
 
-This project uses **beads** (`bd`) for issue tracking, same as the parent quarry project. Beads is a git-native issue tracker stored in `.beads/issues.jsonl`. If an issue discovered here affects multiple repos or requires a standards change, escalate to a [punt-kit bead](https://github.com/punt-labs/punt-kit) instead (see [bead placement scheme](../CLAUDE.md#where-to-create-a-bead)).
+Linear is the tracker of record for this project. Read `.punt-labs/punt/CLAUDE.md` before planning or writing to the tracker. Create issues with the repo label and a type label. If an issue discovered here affects multiple repos or requires a standards change, file it against punt-kit instead.
 
-```bash
-bd ready --limit=99                          # Show ALL issues ready to work (default truncates)
-bd show <id>                                 # View issue details
-bd create --title="Add feature" --type=task --priority=2  # Create issue
-bd update <id> --status=in_progress          # Claim work
-bd close <id>                                # Mark complete
-bd dep add <child> <parent>                  # Set dependency
-bd vc status                                 # Inspect beads database VC state
-```
-
-| Use Beads (`bd`) | Use TodoWrite |
-|------------------|---------------|
+| Use Linear | Use TodoWrite |
+|------------|---------------|
 | Multi-session work | Single-session tasks |
 | Work with dependencies | Simple linear execution |
 | Discovered work to track | Immediate TODO items |
 
-**Rule of thumb**: If you might not finish it this session, or if it blocks/is blocked by other work, use beads.
+**Rule of thumb**: If you might not finish it this session, or if it blocks/is blocked by other work, use Linear.
 
 #### Priority Levels
 
@@ -230,8 +220,8 @@ bd vc status                                 # Inspect beads database VC state
 
 When you discover work that needs doing but isn't part of the current task:
 
-1. Create a beads issue immediately: `bd create --title="..." --type=task`
-2. Add dependencies if relevant: `bd dep add <new-issue> <blocking-issue>`
+1. Create a Linear issue immediately
+2. Add a `blocks` relation if relevant
 3. Continue with current work
 
 ### Workflow Tiers
@@ -240,9 +230,9 @@ Match the workflow to the task's scope. The deciding factor is **design ambiguit
 
 | Tier | Tool | When | Tracking |
 |------|------|------|----------|
-| **T1: Forge** | `/feature-forge` | Epics, cross-cutting work, competing design approaches | Beads with dependencies |
-| **T2: Feature Dev** | `/feature-dev` | Features, multi-file, clear goal but needs exploration | Beads + TodoWrite |
-| **T3: Direct** | Plan mode or manual | Tasks, bugs, obvious implementation path | Beads |
+| **T1: Forge** | `/feature-forge` | Epics, cross-cutting work, competing design approaches | Linear issues with relations |
+| **T2: Feature Dev** | `/feature-dev` | Features, multi-file, clear goal but needs exploration | Linear + TodoWrite |
+| **T3: Direct** | Plan mode or manual | Tasks, bugs, obvious implementation path | Linear |
 
 **Decision flow:**
 
@@ -250,11 +240,11 @@ Match the workflow to the task's scope. The deciding factor is **design ambiguit
 2. Does it touch multiple files and benefit from codebase exploration? → **T2: Feature Dev**
 3. Otherwise → **T3: Direct** (plan mode if >3 files, manual if fewer)
 
-**Bead type mapping:**
+**Issue type mapping:**
 
-| Bead Scope | Default Tier | Override When |
+| Issue Scope | Default Tier | Override When |
 |------------|-------------|---------------|
-| Epic (multi-bead, dependencies) | T1: Forge | Design decisions already settled → T2 |
+| Epic (multi-issue, relations) | T1: Forge | Design decisions already settled → T2 |
 | Feature (new capability) | T2: Feature Dev | Cross-cutting with design ambiguity → T1 |
 | Task (focused, single-concern) | T3: Direct | Scope expands during work → escalate to T2 |
 | Bug | T3: Direct | Root-cause unclear across subsystems → T2 |
@@ -265,15 +255,15 @@ Match the workflow to the task's scope. The deciding factor is **design ambiguit
 
 ### Session Queue
 
-When you claim a batch of beads for one session, mirror the active subset in a session-local plan or task list. Beads are the durable cross-session source of truth; the session plan is the live queue you monitor while executing.
+When you claim a batch of issues for one session, mirror the active subset in a session-local plan or task list. Linear is the durable cross-session source of truth; the session plan is the live queue you monitor while executing.
 
 Workflow:
 
-1. Pick a realistic batch from `bd ready`.
-2. Claim or mark the selected beads in progress.
-3. Create one session-local task per bead using the available planning tool.
-4. Close the bead and mark the session task complete together.
-5. Leave unfinished work as open beads; no extra carry-forward bookkeeping is needed.
+1. Pick a realistic batch of ready Linear issues.
+2. Mark the selected issues In Progress.
+3. Create one session-local task per issue using the available planning tool.
+4. Close the issue and mark the session task complete together.
+5. Leave unfinished work as open issues; no extra carry-forward bookkeeping is needed.
 
 ### Branch Discipline
 
@@ -333,7 +323,7 @@ Three documents track different aspects of the project. Each has a clear trigger
 
 **README.md** — Update when user-facing behavior changes: new flags, commands, defaults, configuration options, or changed workflows. The README is the first thing a user reads; it must reflect the current state of the software, not a past version.
 
-**prfaq.tex** — Update when a change shifts product direction or validates/invalidates a risk assumption from the PR/FAQ. The PR/FAQ lives in the `../prfaq/` repo; cross-repo updates can be tracked with a punt-kit bead if they can't land in the same session.
+**prfaq.tex** — Update when a change shifts product direction or validates/invalidates a risk assumption from the PR/FAQ. The PR/FAQ lives in the `../prfaq/` repo; cross-repo updates can be tracked with a punt-kit Linear issue if they can't land in the same session.
 
 ### Pre-PR Checklist
 
