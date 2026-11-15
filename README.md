@@ -1,182 +1,180 @@
 # quarry-menubar
 
+> macOS menu bar search for a Quarry document index.
+
 [![License](https://img.shields.io/github/license/punt-labs/quarry-menubar)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/punt-labs/quarry-menubar/ci.yml?label=CI)](https://github.com/punt-labs/quarry-menubar/actions/workflows/ci.yml)
-[![Platform](https://img.shields.io/badge/platform-macOS_14+-black)](https://developer.apple.com/macos/)
-[![Swift](https://img.shields.io/badge/swift-5.9-F05138)](https://www.swift.org)
 
-macOS menu bar app for [Quarry](https://github.com/punt-labs/quarry) document search. Search your indexed documents from anywhere with a keyboard shortcut.
+quarry-menubar is a macOS menu bar app that searches the documents you have
+indexed with [Quarry](https://github.com/punt-labs/quarry). Quarry's background
+service, `quarryd`, does the indexing and search; this app is a search window
+for it. The app connects to `quarryd` on your Mac or to a remote Quarry server,
+and it never starts, stops, or configures Quarry itself.
 
-## What It Does
+**Platforms:** macOS 14 (Sonoma) or later, Apple Silicon and Intel
 
-Quarry Menu Bar sits in your menu bar and gives you instant access to your Quarry knowledge base. Click the icon to search across all your indexed documents without switching apps.
+## Quick Start
 
-- **Semantic search** across all indexed documents
-- **Connection-aware UI** for local or remote Quarry
-- **Syntax-highlighted results** for code, Markdown, and prose
-- **Detail view** with full page context for each result
+You need [Homebrew](https://brew.sh) and a working Quarry install (see
+[Setup](#setup)).
 
-The app does **not** manage Quarry itself. It follows Quarry's current connection model, mirroring the resolution the `quarry` CLI uses:
+The install script adds the Punt Labs Homebrew tap, installs or upgrades the
+app, and links it into `~/Applications`. Running it again upgrades in place.
+Download the script and read it before you run it.
 
-- Use the **remote** profile in `~/.punt-labs/mcp-proxy/quarry.toml` when it names a non-loopback host (its `url`, pinned `ca_cert`, and `Authorization: Bearer` token)
-- Otherwise connect to the **local daemon** on loopback: read the bound port from `serve.port` and the live bearer from `serve.token` in the daemon's startup-database run dir (`~/.punt-labs/quarry/data/<db>/`, `<db>` from `config.toml`'s `[default] database`, else `default`), pinning the CA in `~/.punt-labs/quarry/tls/ca.crt`
-
-Quarry serves every engine endpoint under `/v1/` (only `/health` stays at the root) and requires the daemon's `serve.token` on loopback requests. If `quarryd` is not running (no `serve.port`) or its `serve.token` is unreadable, the app shows a configuration error pointing at the daemon rather than a bare failure.
-
-## Install via Homebrew
-
-### Recommended: one command
-
-`install.sh` runs the full flow — tap, trust, install/upgrade, and the required
-`~/Applications` symlink — and is idempotent, so re-running it upgrades in
-place. Because the app is unsigned and non-notarized, fetch and review the
-script before running it rather than piping it blindly into a shell:
+Download the script:
 
 ```bash
-# Fetch, review, then run
-curl -fsSL https://raw.githubusercontent.com/punt-labs/quarry-menubar/main/install.sh -o install.sh
-less install.sh          # review before running
+curl -fsSL https://raw.githubusercontent.com/punt-labs/quarry-menubar/1bc6b48/install.sh -o install.sh
+```
+
+Read it:
+
+```bash
+less install.sh
+```
+
+Run it:
+
+```bash
 sh install.sh
 ```
 
-Or clone the repo and run it from there:
+Open the app:
 
 ```bash
-git clone https://github.com/punt-labs/quarry-menubar.git
-cd quarry-menubar && ./install.sh
+open -a QuarryMenuBar
 ```
 
-### Manual: four steps
+The app has no Dock icon. Look for its magnifying-glass icon in the menu bar.
 
-1. **Add the tap.**
+### Manual Install
 
-   ```bash
-   brew tap punt-labs/homebrew-tap
-   ```
-
-2. **Trust the tap.** Homebrew refuses to load formulae from an untrusted
-   third-party tap (`Refusing to load formula ... from untrusted tap`). Trust
-   is a one-time, per-tap action.
-
-   ```bash
-   brew trust punt-labs/homebrew-tap
-   ```
-
-3. **Install (and, later, upgrade).**
-
-   ```bash
-   brew install punt-labs/homebrew-tap/quarry-menubar
-   ```
-
-4. **Symlink into `~/Applications` (required).** The formula installs the app
-   into the Homebrew prefix but cannot create this symlink itself — Homebrew's
-   install sandbox forbids writes to `$HOME`, so without this step the app
-   never appears in Spotlight or Launchpad.
-
-   ```bash
-   mkdir -p ~/Applications && ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app
-   ```
-
-### Notes
-
-This installs a prebuilt, universal (Apple Silicon + Intel) `QuarryMenuBar.app`
-from the latest GitHub Release. It is a **formula, not a cask**, so Homebrew
-does not quarantine the download: the app is ad-hoc signed but **not
-notarized**, and it still launches with no Gatekeeper prompt and no Developer
-ID certificate. No Xcode or build tools are required.
-
-It is a menu-bar-only app — no Dock icon; look for the icon in the menu bar.
-Launch it with `open -a QuarryMenuBar`, Spotlight, or a double-click in
-`~/Applications` (not by running the `.app` bundle path directly). It follows
-your active Quarry connection (a remote profile in
-`~/.punt-labs/mcp-proxy/quarry.toml` if it names a remote host, otherwise the
-local `quarryd` on loopback via its `serve.port`/`serve.token`).
-
-## Requirements
-
-- macOS 14 (Sonoma) or later
-- [quarry](https://github.com/punt-labs/quarry) installed and configured
+Add the Punt Labs tap:
 
 ```bash
-pip install quarry-mcp
-quarry install
-quarry ingest ~/Documents/my-notes.md
+brew tap punt-labs/homebrew-tap
 ```
 
-For remote Quarry:
+Trust the tap. Homebrew can refuse to load formulas from a third-party tap
+until you trust it (`Refusing to load formula ... from untrusted tap`). You do
+this once per tap.
+
+```bash
+brew trust punt-labs/homebrew-tap
+```
+
+Install the app. Run `brew upgrade quarry-menubar` later to update it.
+
+```bash
+brew install punt-labs/homebrew-tap/quarry-menubar
+```
+
+Link the app into `~/Applications`. Homebrew installs the app inside its own
+prefix and is not allowed to write to your home folder, so it cannot make this
+link itself. Without the link, the app does not appear in Spotlight or
+Launchpad.
+
+```bash
+mkdir -p ~/Applications && ln -sfn "$(brew --prefix quarry-menubar)/QuarryMenuBar.app" ~/Applications/QuarryMenuBar.app
+```
+
+### What Gets Installed
+
+Homebrew downloads a prebuilt universal (Apple Silicon and Intel)
+`QuarryMenuBar.app` from the latest
+[GitHub Release](https://github.com/punt-labs/quarry-menubar/releases). No
+Xcode or build tools are needed.
+
+The app is ad-hoc signed but not notarized, and it has no Developer ID
+certificate. It is installed as a Homebrew formula, not a cask, so Homebrew
+does not mark the download as quarantined and macOS opens it without a
+Gatekeeper prompt. Install it only from the `punt-labs/homebrew-tap` tap.
+
+Start the app with `open -a QuarryMenuBar`, with Spotlight, or by
+double-clicking it in `~/Applications`. Do not run the executable inside the
+`.app` bundle directly.
+
+## Features
+
+- **Search from the menu bar**: results update as you type, grouped by file
+  type (Python, Markdown, PDF, and so on).
+- **Collection filter**: search all collections or just one. A collection is
+  a named group of documents in Quarry.
+- **Full-page view**: open a result to read the whole page it came from, and
+  copy that text.
+- **Syntax highlighting**: code and Markdown are colored, with six color
+  themes.
+- **Reveal in Finder**: show a result's source file in Finder (local Quarry
+  only).
+- **Local or remote**: connect to `quarryd` on your Mac or to a remote Quarry
+  server.
+- **Connection status**: the panel shows whether the app is connected, and
+  when it cannot connect it shows the error and the Quarry command that fixes
+  it.
+
+## Using the App
+
+Click the menu bar icon to open the search panel. The header shows the server
+you are connected to, the active Quarry database, and the connection status
+(Connecting, Connected, Unavailable, or Config Error). If the app cannot
+connect, the menu bar icon changes to a warning triangle.
+
+| Action | How |
+|--------|-----|
+| Open the search panel | Click the menu bar icon |
+| Search | Type in the search field; results update as you type |
+| Search only one collection | Choose a collection from the folder menu to the left of the search field |
+| Move through results | Up and Down arrow keys |
+| Open a result | Click it, or highlight it and press Return |
+| Copy the page text | Click **Copy** in the result view |
+| Show the source file in Finder | Click **Reveal in Finder** in the result view (local Quarry only) |
+| Go back to the results | Click **Back** or press Escape |
+| Clear the search and close the panel | Press Escape from the results list |
+| Change the color theme | Click the paintbrush menu in the header |
+| Reconnect to Quarry | Click **Refresh** at the bottom of the panel, or **Retry** / **Reload Config** on an error screen |
+| Quit | Click **Quit** or press Command-Q while the panel is open |
+
+The result view loads the full page from Quarry. If that request fails, the
+app shows the search excerpt instead, with a warning.
+
+## Setup
+
+The app needs a Quarry server to search. Install Quarry by following its
+[Quick Start](https://github.com/punt-labs/quarry#quick-start), and index some
+documents. For example, to index a folder:
+
+```bash
+quarry register ~/Documents/notes
+```
+
+**Local Quarry.** The app connects to the `quarryd` service on your Mac
+automatically. There is nothing to configure. Quarry does not support Intel
+Macs, so on an Intel Mac the app can only connect to a remote server.
+
+**Remote Quarry.** Log in to the server with the Quarry command-line tool. The
+app then connects to that server instead of the local one.
 
 ```bash
 quarry login <host> --api-key <token>
-# or set QUARRY_API_KEY before running: quarry login <host>
 ```
 
-## Development
+You can set the `QUARRY_API_KEY` environment variable instead of passing
+`--api-key`. To go back to local Quarry, run `quarry logout`, then click
+**Refresh** in the app.
 
-### Setup
+**If the app cannot connect.** The panel shows the reason and the command to
+run next. The common cases are that `quarryd` is not running or that Quarry has
+not been set up on this Mac; `quarry install` sets it up. After you fix the
+problem, click **Retry** or **Reload Config**.
 
-```bash
-brew install xcodegen swiftformat swiftlint
-make generate   # Create .xcodeproj from project.yml
-```
+## Documentation
 
-### Build and Run
+[How the App Finds Quarry](docs/architecture.md) |
+[Design Decisions](DESIGN.md) |
+[Contributing](CONTRIBUTING.md) |
+[Changelog](CHANGELOG.md)
 
-```bash
-make run        # Build and launch the menu bar app
-make test       # Run unit tests
-make all        # Format, lint, build, and test
-```
+## License
 
-### Quality Gates
-
-Must pass before every commit:
-
-```bash
-make format && make lint && make test
-```
-
-### Project Structure
-
-```text
-QuarryMenuBar/
-  App/                  # App entry point, lifecycle
-  Models/               # Codable JSON models for API responses
-  Services/             # ConnectionManager, ConnectionProfileLoader, QuarryClient, HotkeyManager
-  Utilities/            # SyntaxHighlighter
-  ViewModels/           # SearchViewModel (debounced search)
-  Views/                # SwiftUI views (ContentPanel, SearchPanel, ResultDetail, ...)
-QuarryMenuBarTests/     # Unit tests (mirrors source structure)
-project.yml             # XcodeGen project definition
-Makefile                # Build, test, format, lint, version targets
-```
-
-The Xcode project is generated from `project.yml` and gitignored. New `.swift` files placed in the source directories are auto-discovered on `make generate`.
-
-## Architecture
-
-The app is a Quarry client — a Swift port of quarry's client tier. It resolves the active connection, talks to Quarry over HTTP(S), and adapts the UI to local vs remote capabilities. Design decisions (with rejected alternatives) are recorded in [`DESIGN.md`](DESIGN.md).
-
-```text
-QuarryMenuBarApp / AppDelegate           # owns the app-lifetime ConnectionManager;
-  -> ConnectionManager                   #   connects once at applicationDidFinishLaunching
-       (owns the connect Task at app scope — NOT a view's .task, which MenuBarExtra cancels)
-  -> ConnectionProfileLoader             # remote quarry.toml, else loopback serve.port/serve.token
-  -> QuarryClient (HTTP(S) /v1 + Bearer auth + pinned CA)
-  -> SearchViewModel (debounced search via QuarryClient)
-  -> ContentPanel (renders by connection state; delegates connect/refresh to ConnectionManager)
-```
-
-Connection ownership lives at app scope, not in a view — see [`DESIGN.md`](DESIGN.md) ADR-002 (why) and ADR-001 (the thin-views/testability principle it follows).
-
-Dependencies:
-
-- `HighlightSwift` for syntax highlighting themes
-- Pure SwiftUI + `@Observable` for app state and UI composition
-
-## Roadmap
-
-- [ ] Register folders for sync directly from menu bar
-- [ ] Trigger sync from menu bar
-- [ ] Ingest files via drag-and-drop
-- [ ] Global keyboard shortcut configuration
-- [ ] Status indicator for sync/ingest progress
+MIT
