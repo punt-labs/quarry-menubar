@@ -230,3 +230,6 @@ lancedb/
 .*.lock
 
 # ethos: shared machine-local zone (never track)
+
+# Ignore any leftover local beads runtime state (tracker retired)
+.beads/
