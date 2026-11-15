@@ -215,7 +215,7 @@ is the correct trust model for personal infrastructure with no PKI.
 
 ## ADR-007: Testability posture — protocol fakes, injected clocks, coverage target, real-app gate
 
-**Status:** Accepted (target); path is the ADR-004/005 beads.
+**Status:** Accepted (target); path is ADR-004/005.
 
 ### Decision
 
