@@ -95,7 +95,7 @@ There is no subprocess ownership and no runtime dependency on the `quarry` CLI b
 The app uses Swift 5.9's `@Observable` macro (not the older `ObservableObject` protocol):
 
 - **Models** (`QuarryModels.swift`): Plain `Codable & Sendable` structs with `snake_case` JSON keys via `convertFromSnakeCase` strategy
-- **Services**: `QuarryClient` (HTTP(S), auth, pinned CA), `ConnectionManager` (@MainActor @Observable, owns connection state), `ConnectionProfileLoader` (parses Quarry config), `HotkeyManager` (@MainActor, NSEvent monitors)
+- **Services**: `QuarryClient` (HTTP(S), auth, pinned CA), `ConnectionManager` (@MainActor @Observable, owns connection state), `ConnectionProfileLoader` (parses Quarry config)
 - **ViewModel**: `SearchViewModel` (@MainActor @Observable) — debounced search with 300ms interval, cancellation support
 - **Views**: SwiftUI with `@Bindable` for viewmodel bindings, `@FocusState` for keyboard focus
 
@@ -137,7 +137,7 @@ Uses `NSColor.system*` adaptive colors that respect system light/dark appearance
 - **Duplication is a design failure.** If you see two copies, extract one abstraction.
 - **Legacy code shrinks.** Every change is an opportunity to simplify what surrounds it.
 - **Sendable types** for anything crossing actor boundaries. Models are `Codable & Sendable`.
-- **@MainActor** on all UI-touching code (view models, daemon manager, hotkey manager).
+- **@MainActor** on all UI-touching code (view models, connection manager).
 - **SwiftFormat + SwiftLint must pass** before every commit. Config in `.swiftformat` and `.swiftlint.yml`.
 
 ### Code Organization
