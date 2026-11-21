@@ -57,7 +57,7 @@ make test
 QuarryMenuBar/
   App/                  # App entry point, lifecycle
   Models/               # Codable JSON models for API responses
-  Services/             # ConnectionManager, ConnectionProfileLoader, QuarryClient, HotkeyManager
+  Services/             # ConnectionManager, ConnectionProfileLoader, QuarryClient
   Utilities/            # SyntaxHighlighter
   ViewModels/           # SearchViewModel (debounced search)
   Views/                # SwiftUI views (ContentPanel, SearchPanel, ResultDetail, ...)

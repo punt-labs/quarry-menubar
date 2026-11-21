@@ -25,7 +25,7 @@ Do not grade PR titles, PR descriptions, commit messages, or CHANGELOG wording.
 Do not grade agent process rules from CLAUDE.md, AGENTS.md, or WORKFLOW.md (missions, review cycles, delegation).
 """
 smart_router_extra_instructions = """
-High risk: QuarryMenuBar/Services/ (connection resolution, QuarryClient auth, pinned-CA TLS in PinnedCASessionDelegate.swift, HotkeyManager.swift), install.sh, and packaging/.
+High risk: QuarryMenuBar/Services/ (connection resolution, QuarryClient auth, pinned-CA TLS in PinnedCASessionDelegate.swift), install.sh, and packaging/.
 Low risk: docs-only diffs (*.md, docs/) and test-only diffs (QuarryMenuBarTests/).
 """
 
