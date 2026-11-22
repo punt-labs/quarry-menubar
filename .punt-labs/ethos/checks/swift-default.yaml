@@ -10,7 +10,7 @@ checks:
   - name: swiftlint
     stage: edit
     files: ["QuarryMenuBar/**/*.swift", "QuarryMenuBarTests/**/*.swift"]
-    run: [swiftlint, lint, --strict, --quiet, --force-exclude, "{file}"]
+    run: [swiftlint, lint, --config, .punt-labs/ethos/swiftlint-paths.yml, --strict, --quiet, --force-exclude, "{file}"]
     on_fail: advisory
     timeout: 5s
   - name: shellcheck
@@ -27,7 +27,7 @@ checks:
   - name: swiftlint-staged
     stage: commit
     files: ["QuarryMenuBar/**/*.swift", "QuarryMenuBarTests/**/*.swift"]
-    run: [swiftlint, lint, --quiet, --force-exclude, "{files}"]
+    run: [swiftlint, lint, --config, .punt-labs/ethos/swiftlint-paths.yml, --quiet, --force-exclude, "{files}"]
     on_fail: block
   - name: full-gate
     stage: handoff
