@@ -64,15 +64,14 @@ build: generate format lint
 		-derivedDataPath $(DERIVED_DATA) \
 		-quiet
 
-test: SHELL := /bin/bash
 test: generate
 	@echo "Running unit tests..."
-	@set -o pipefail; xcodebuild test \
+	@xcodebuild test \
 		-scheme $(SCHEME) \
 		-destination '$(DESTINATION)' \
 		-derivedDataPath $(DERIVED_DATA) \
 		-only-testing:QuarryMenuBarTests \
-		2>&1 | grep -E "(Executed|TEST SUCCEEDED|TEST FAILED)" | tail -3
+		-quiet
 
 clean:
 	@echo "Cleaning..."
