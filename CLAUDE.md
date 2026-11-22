@@ -38,6 +38,7 @@ This means **any `.swift` file placed under `QuarryMenuBar/` is automatically in
 ```bash
 make generate    # Regenerate .xcodeproj from project.yml
 make format      # Run SwiftFormat
+make format-check # Check formatting without changing source
 make lint        # Run SwiftLint
 make build       # Full pipeline: generate + format + lint + xcodebuild
 make test        # Run unit tests
@@ -48,7 +49,8 @@ make clean       # Remove DerivedData
 
 Single test file: `xcodebuild test -scheme QuarryMenuBar -destination 'platform=macOS' -only-testing:QuarryMenuBarTests/QuarryClientTests`
 
-Quality gates before every commit: `make format && make lint && make test`
+Quality gates before every commit: `make check`. Use `make format` to fix
+formatting explicitly; the gate does not rewrite source.
 
 ### Versioning
 
@@ -186,7 +188,7 @@ Treat review feedback seriously, but do not cargo-cult it. If you decline a sugg
 
 ### Verify Outputs, Not Just Gates
 
-Passing `make format`, `make lint`, and `make test` is necessary, not sufficient. After changing behavior:
+Passing `make check` is necessary, not sufficient. After changing behavior:
 
 - Open the touched files and read the resulting code.
 - **Run the real app to its working state — this is the release gate, and nothing substitutes for it.** For any change touching connection, runtime, or UI, `make run` and drive the *actual* app through the affected flow (**menu bar → Connected → search → open a detail view**). A backend harness (`curl`/`urllib`/a Swift script hitting the daemon) or a skip-guarded live unit test verifies the *contract*, not the app's real `URLSession`/TLS/`@MainActor`/MenuBarExtra runtime flow — where bugs like a cancelled `refresh()` Task live. A passing harness or unit test **must never** be treated as the verification. If you cannot drive the menu-bar UI yourself, hand the running build to the operator for confirmation; do not declare it working, and do not release, on harness or unit-test evidence alone.
@@ -330,7 +332,7 @@ Three documents track different aspects of the project. Each has a clear trigger
 - [ ] **CHANGELOG entry** in the PR diff (see Documentation Discipline above)
 - [ ] **README updated** if user-facing behavior changed
 - [ ] **PR/FAQ updated** if product direction or risk assumptions shifted
-- [ ] **Quality gates pass**: `make format && make lint && make test`
+- [ ] **Quality gates pass**: `make check`
 - [ ] **Real-app run — mandatory for any connection/runtime/UI change (not just features):** `make run` and drive the *actual* app to **Connected → search → open a detail view** against a real Quarry connection. A backend harness or a skip-guarded live unit test does **not** satisfy this — it is the contract, not the running app. Confirm via the real UI or operator eyeball before opening the PR; never release on harness/unit-test evidence alone.
 - [ ] **Local review agents run on the full diff** and their findings are resolved
 - [ ] **Human IDE review** completed on the full diff
@@ -344,7 +346,7 @@ Two nested loops govern all non-trivial changes.
 Run this loop after each sizeable implementation step or delegated mission:
 
 1. Implement the change or delegate it to the right specialist.
-2. Run the relevant local checks. For production code changes, that means the full gate: `make format && make lint && make test`.
+2. Run the relevant local checks. For production code changes, that means the full gate: `make check`.
 3. Exercise the changed behavior manually against a real Quarry connection when the change affects runtime behavior.
 4. Run local review agents on the mission diff. Minimum: one general code-review pass and one silent-failure / edge-case pass.
 5. Fix every finding. To dismiss one, record the exact finding, the reason it does not apply, and the code reference.

@@ -64,6 +64,7 @@ jobs:
 
       - name: Run Unit Tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -scheme QuarryMenuBar \
             -destination 'platform=macOS' \

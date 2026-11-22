@@ -197,12 +197,12 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
 
     private func subjectAlternativeNames(for certificate: SecCertificate) -> [String] {
         guard let values = SecCertificateCopyValues(
-            certificate,
-            [kSecOIDSubjectAltName] as CFArray,
-            nil
-        ) as? [CFString: Any],
-            let altNameDictionary = values[kSecOIDSubjectAltName] as? [CFString: Any],
-            let entries = altNameDictionary[kSecPropertyKeyValue] as? [[CFString: Any]]
+                  certificate,
+                  [kSecOIDSubjectAltName] as CFArray,
+                  nil
+              ) as? [CFString: Any],
+              let altNameDictionary = values[kSecOIDSubjectAltName] as? [CFString: Any],
+              let entries = altNameDictionary[kSecPropertyKeyValue] as? [[CFString: Any]]
         else {
             return []
         }
@@ -219,11 +219,11 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
 
     private func commonName(for certificate: SecCertificate) -> String? {
         guard let values = SecCertificateCopyValues(
-            certificate,
-            [kSecOIDCommonName] as CFArray,
-            nil
-        ) as? [CFString: Any],
-            let commonNameDictionary = values[kSecOIDCommonName] as? [CFString: Any]
+                  certificate,
+                  [kSecOIDCommonName] as CFArray,
+                  nil
+              ) as? [CFString: Any],
+              let commonNameDictionary = values[kSecOIDCommonName] as? [CFString: Any]
         else {
             return nil
         }
@@ -238,11 +238,11 @@ final class PinnedCASessionDelegate: NSObject, URLSessionDelegate, URLSessionTas
 
     private func allowsServerAuthentication(for certificate: SecCertificate) -> Bool {
         guard let values = SecCertificateCopyValues(
-            certificate,
-            [kSecOIDExtendedKeyUsage] as CFArray,
-            nil
-        ) as? [CFString: Any],
-            let extendedUsageDictionary = values[kSecOIDExtendedKeyUsage] as? [CFString: Any]
+                  certificate,
+                  [kSecOIDExtendedKeyUsage] as CFArray,
+                  nil
+              ) as? [CFString: Any],
+              let extendedUsageDictionary = values[kSecOIDExtendedKeyUsage] as? [CFString: Any]
         else {
             return true
         }

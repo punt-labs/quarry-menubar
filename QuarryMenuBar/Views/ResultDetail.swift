@@ -101,10 +101,14 @@ struct ResultDetail: View {
 
     // MARK: Private
 
-    @State private var highlightOutput: SyntaxHighlighter.Output?
-    @State private var detailWarningMessage: String?
-    @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("syntaxTheme") private var themeName: String = "xcode"
+    @State
+    private var highlightOutput: SyntaxHighlighter.Output?
+    @State
+    private var detailWarningMessage: String?
+    @Environment(\.colorScheme)
+    private var colorScheme
+    @AppStorage("syntaxTheme")
+    private var themeName: String = "xcode"
 
     /// Re-run highlighting when result, theme, or color scheme changes.
     private var taskID: String {

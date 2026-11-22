@@ -37,19 +37,25 @@ See the README's [Setup](README.md#setup) section.
 
 ## Quality Gates
 
-These must pass before every commit:
+Use `make format` to fix formatting, then run the non-mutating source
+checks and the macOS tests before committing:
 
 ```bash
-make format
+make check
 ```
 
-```bash
-make lint
-```
+### Ethos agent checks
 
-```bash
-make test
-```
+Use an [Ethos build with DES-085](https://github.com/punt-labs/ethos/pull/647)
+and the matching Claude Code plugin; Ethos v5.1.1 is too old. Run
+`ethos enable` to install or refresh the Git hooks, then restart Claude Code
+to regenerate the agents. Install `shellcheck` if you edit shell scripts.
+
+Swift edits get file-scoped formatting and lint feedback; shell edits get
+ShellCheck feedback. Neither blocks an edit. Commits check staged Swift
+paths and handoff runs `make check`, which generates the ignored Xcode
+project but does not rewrite source. Stage or stash any unstaged changes
+to a checked Swift file before committing.
 
 ## Project Structure
 
