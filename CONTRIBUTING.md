@@ -46,14 +46,14 @@ make check
 
 ### Ethos agent checks
 
-Use an [Ethos build with DES-085](https://github.com/punt-labs/ethos/pull/647)
-and the matching Claude Code plugin; Ethos v5.1.1 is too old. Run
+Use [Ethos v5.2.0 or later](https://github.com/punt-labs/ethos/releases/tag/v5.2.0)
+and the matching Claude Code plugin. Run `ethos seed` after upgrading, then
 `ethos enable` to install or refresh the Git hooks, then restart Claude Code
 to regenerate the agents. Install `shellcheck` if you edit shell scripts.
 
 Swift edits get file-scoped formatting and lint feedback; shell edits get
 ShellCheck feedback. Neither blocks an edit. Commits check staged Swift
-paths and handoff runs `make check`, which generates the ignored Xcode
+paths and an editing agent's handoff runs `make check`, which generates the ignored Xcode
 project but does not rewrite source. Stage or stash any unstaged changes
 to a checked Swift file before committing.
 
