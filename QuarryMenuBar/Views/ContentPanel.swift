@@ -73,7 +73,8 @@ struct ContentPanel: View {
         ThemeChoice(theme: .standard, label: "Standard", isDark: false)
     ]
 
-    @AppStorage("syntaxTheme") private var themeName: String = "xcode"
+    @AppStorage("syntaxTheme")
+    private var themeName: String = "xcode"
 
     private var activeThemeIsDark: Bool {
         Self.themeChoices.first {

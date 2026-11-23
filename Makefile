@@ -5,7 +5,7 @@ SCHEME = QuarryMenuBar
 DESTINATION = platform=macOS
 DERIVED_DATA = ./DerivedData
 
-.PHONY: help generate build test clean lint format check all run version bump-patch bump-minor bump-major bump-build
+.PHONY: help generate build test clean lint format format-check check all run version bump-patch bump-minor bump-major bump-build
 
 help:
 	@echo "Available commands:"
@@ -13,9 +13,11 @@ help:
 	@echo "  Development:"
 	@echo "    make generate    - Regenerate Xcode project from project.yml"
 	@echo "    make format      - Run SwiftFormat to auto-format code"
+	@echo "    make format-check - Check SwiftFormat without changing source"
 	@echo "    make lint        - Run SwiftLint on source files"
 	@echo "    make build       - Build the app (runs format + lint first)"
 	@echo "    make test        - Run unit tests"
+	@echo "    make check       - Check formatting, lint, and run unit tests"
 	@echo "    make coverage    - Run tests with code coverage report"
 	@echo "    make clean       - Clean build artifacts"
 	@echo "    make run         - Build and launch the menu bar app"
@@ -34,17 +36,20 @@ generate:
 format:
 	@echo "Running SwiftFormat..."
 	@if command -v swiftformat >/dev/null 2>&1; then \
-		swiftformat . --quiet; \
+		swiftformat . --quiet && \
 		echo "SwiftFormat: Complete."; \
 	else \
 		echo "SwiftFormat not installed. Install with: brew install swiftformat"; \
 		exit 1; \
 	fi
 
+format-check:
+	swiftformat QuarryMenuBar QuarryMenuBarTests --lint
+
 lint:
 	@echo "Running SwiftLint..."
 	@if command -v swiftlint >/dev/null 2>&1; then \
-		swiftlint lint --quiet || (echo "SwiftLint found violations. Fix them before continuing." && exit 1); \
+		swiftlint lint --quiet || { echo "SwiftLint found violations. Fix them before continuing." >&2; exit 1; }; \
 		echo "SwiftLint: No violations found."; \
 	else \
 		echo "SwiftLint not installed. Install with: brew install swiftlint"; \
@@ -66,7 +71,7 @@ test: generate
 		-destination '$(DESTINATION)' \
 		-derivedDataPath $(DERIVED_DATA) \
 		-only-testing:QuarryMenuBarTests \
-		2>&1 | grep -E "(Executed|TEST SUCCEEDED|TEST FAILED)" | tail -3
+		-quiet
 
 clean:
 	@echo "Cleaning..."
@@ -99,8 +104,8 @@ run: build
 all: generate format lint build test
 	@echo "All steps complete."
 
-check: format lint test
-	@echo "make check: format + lint + test passed."
+check: format-check lint test
+	@echo "make check: format-check + lint + test passed."
 
 # =============================================================================
 # Versioning

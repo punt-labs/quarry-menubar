@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Generated agents report file-scoped Swift and shell checks after edits.
+  Staged Swift checks gate commits, and the full read-only source check gates
+  agent handoff.
 - Vendor the gstack ethos team under `.punt-labs/ethos/` and set
   `resolution: repo-only`, so a fresh clone resolves its ethos identities
   without the retired team-registry submodule or a global store.

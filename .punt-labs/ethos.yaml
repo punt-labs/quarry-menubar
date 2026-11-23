@@ -1,2 +1,3 @@
 agent: claude
 team: quarry-menubar
+checks: swift-default

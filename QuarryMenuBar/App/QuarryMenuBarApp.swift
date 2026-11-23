@@ -42,7 +42,8 @@ struct QuarryMenuBarApp: App {
 
     // MARK: Private
 
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @NSApplicationDelegateAdaptor(AppDelegate.self)
+    private var appDelegate
 
     private var statusBarIcon: String {
         switch appDelegate.connectionManager.state {

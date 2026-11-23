@@ -17,7 +17,7 @@ Match the workflow to the issue's scope. See CLAUDE.md for full details.
 Quality gates must pass before every commit:
 
 ```bash
-make format && make lint && make test
+make check
 ```
 
 ## Session Close Protocol
@@ -25,7 +25,7 @@ make format && make lint && make test
 Follow the protocol in CLAUDE.md. The short version:
 
 1. **File issues** for remaining work in Linear
-2. **Quality gates** must pass (`make format && make lint && make test`)
+2. **Quality gates** must pass (`make check`)
 3. **Close issues** for finished work in Linear
 4. **Push to remote** — work is NOT complete until `git push` succeeds:
 

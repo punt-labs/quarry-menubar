@@ -4,7 +4,8 @@ struct SearchPanel: View {
 
     // MARK: Internal
 
-    @Bindable var viewModel: SearchViewModel
+    @Bindable
+    var viewModel: SearchViewModel
 
     let allowsFinderReveal: Bool
 
@@ -60,9 +61,12 @@ struct SearchPanel: View {
     /// items fully clear sticky section headers and list chrome.
     private static let scrollAnchorUp = UnitPoint(x: 0.5, y: 0.15)
 
-    @State private var scrollAnchor: UnitPoint = .top
-    @State private var detailTextForCopy: String?
-    @FocusState private var isSearchFocused: Bool
+    @State
+    private var scrollAnchor: UnitPoint = .top
+    @State
+    private var detailTextForCopy: String?
+    @FocusState
+    private var isSearchFocused: Bool
 
     private var collectionPicker: some View {
         Menu {
