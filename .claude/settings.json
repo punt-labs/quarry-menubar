@@ -21,7 +21,9 @@
       "mcp__plugin_github_github__*",
       "mcp__plugin_quarry_quarry__*",
       "mcp__github__*",
-      "mcp__quarry__*"
+      "mcp__quarry__*",
+      "Bash(biff:*)",
+      "Skill(biff:*)"
     ],
     "deny": [
       "Bash(rm -rf /:*)",
@@ -45,6 +47,26 @@
       "Edit(.envrc)",
       "Write(.envrc)",
       "Bash(direnv allow:*)"
+    ],
+    "ask": [
+      "Bash(biff install)",
+      "Bash(biff install:*)",
+      "Bash(biff uninstall)",
+      "Bash(biff uninstall:*)",
+      "Bash(biff install-statusline)",
+      "Bash(biff install-statusline:*)",
+      "Bash(biff uninstall-statusline)",
+      "Bash(biff uninstall-statusline:*)",
+      "Bash(biff enable)",
+      "Bash(biff enable:*)",
+      "Bash(biff disable)",
+      "Bash(biff disable:*)",
+      "Bash(biff serve)",
+      "Bash(biff serve:*)",
+      "Bash(biff mcp)",
+      "Bash(biff mcp:*)",
+      "Bash(biff hook)",
+      "Bash(biff hook:*)"
     ]
   }
 }
