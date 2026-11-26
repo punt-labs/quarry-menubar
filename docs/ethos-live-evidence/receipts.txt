@@ -1,0 +1,96 @@
+Quarry: f9ec901be2e7eb5cc562be57d00aff7d43fcb412
+Ethos:  7fa2922b6d420bbddede15563fc530f526b1e4a8
+
+Original stream diagnostic: matched path events (out of 10), zero loss flags
+Roots            Startup wait  Mutation hold  Post-op wait  Matched
+checkout + .git             0              0             0        3
+checkout + .git         150ms              0             0        0
+checkout + .git             0              0         150ms       10
+checkout + .git             0          150ms             0        5
+checkout + .git         150ms              0         150ms        9
+.git only                   0              0             0        2
+.git only               150ms              0             0        1
+.git only                   0              0         150ms        9
+.git only                   0          150ms             0        7
+.git only               150ms              0         150ms       10
+
+Guarded make check (equal before/after keys within each run)
+clean: pass, exit 0, 10.32s, FSEvents=0, vnode events=0
+broken: fail, exit 2, 0.14s, FSEvents=0, vnode events=0
+mid-run-edit: deferred, exit 0, 13.87s, FSEvents=2, vnode events=1
+dropped-events: deferred, exit 0, 10.09s, FSEvents=1, vnode events=0
+check-writes: deferred, exit 0, 11.19s, FSEvents=2, vnode events=1
+
+Immediate cutoff (equal before/after keys per batch)
+git-create-remove: FSEvents-only 8/20; scoped cutoff 0/20; guarded 20/20
+git-rename-in-out: FSEvents-only 2/20; scoped cutoff 0/20; guarded 20/20
+keyed:write-restore: FSEvents-only 6/20; scoped cutoff 0/20; guarded 20/20
+keyed:replace-restore: FSEvents-only 5/20; scoped cutoff 3/20; guarded 20/20
+
+Mutation before closing key (equal before/after keys per trial)
+git-create-remove: FSEvents-only 20/20; scoped cutoff 0/20; guarded 20/20
+git-rename-in-out: FSEvents-only 20/20; scoped cutoff 0/20; guarded 20/20
+keyed:write-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+keyed:replace-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+HEAD:write-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+HEAD:replace-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+index:write-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+index:replace-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+
+Mutation after closing key but before cutoff (equal keys per batch)
+keyed:write-restore: FSEvents-only 7/20; scoped cutoff 7/20; guarded 20/20
+HEAD:replace-restore: FSEvents-only 17/20; scoped cutoff 17/20; guarded 20/20
+index:replace-restore: FSEvents-only 16/20; scoped cutoff 16/20; guarded 20/20
+
+In the three probe groups above, counts give verdicts of "deferred".
+Every guarded deferral had the expected vnode path and mutation flag.
+
+NOTE_ATTRIB controls
+Clean checkout HEAD: 757566bd4126e455a04c836751f3328bf19033bf
+Each run had equal keys and suppressed one .git/index atime-only event.
+1: pass, exit 0, 10.37s, FSEvents=0, vnode events=0, vnode fds=285, atime-only=5
+2: pass, exit 0, 9.14s, FSEvents=0, vnode events=0, vnode fds=285, atime-only=5
+3: pass, exit 0, 9.59s, FSEvents=0, vnode events=0, vnode fds=285, atime-only=5
+
+Chmod and restore (disposable clone at f9ec901, equal keys per trial)
+LICENSE: vnode-only deferred 20/20; 229 fds; standalone NOTE_ATTRIB
+.git/index: vnode-only deferred 20/20; 229 fds; standalone NOTE_ATTRIB
+
+Descriptor-budget controls (real checkout HEAD 786f39a524fe80e3c6e894077fe74ea51a7c4e19)
+Soft RLIMIT_NOFILE=256 (128-watch budget): harness exit 1, deferred:
+keyed set too large for vnode guard (gate not run)
+Injected EMFILE on second vnode path open: deferred: cannot arm vnode guard:
+[Errno 24] Too many open files. Gate not run; first watch descriptor closed.
+Normal limit, first trial: deferred, gate exit 0 in 11.19s; FSEvents saw
+index.lock and the .git directory vnode fired; keys equal.
+Normal limit, isolated retry: pass, exit 0, 9.51s, FSEvents=0,
+vnode events=0, vnode fds=303, atime-only=5, keys equal.
+Chmod regression: keyed file and .git/index each deferred on vnode alone
+20/20 with 229 watch descriptors.
+
+Clean deferral rate with GIT_OPTIONAL_LOCKS=0 in make check
+Real checkout HEAD: 6c416f2b6eda4dfaad1cc6b0bccd047a47454dab
+All gates exited 0, all key pairs were equal, and every guard watched 317 fds.
+Quiet, no background Git: 0/10 deferred (8.37-8.84s).
+Background git status + git diff --stat every 1-3s, default optional locks:
+10/10 deferred (8.46-9.42s). Each saw only index.lock FSEvents and a .git
+vnode write. The actor ran 62 command pairs; the watcher reported 57 lock
+records, not a reliable count of individual operations.
+Same background commands with GIT_OPTIONAL_LOCKS=0 in the actor:
+0/10 deferred (8.44-12.45s), no veto events, 76 command pairs.
+Check-written keyed file regression: deferred, exit 0 in 9.64s; two
+FSEvents and one vnode veto.
+
+Index observation counterexample (disposable scratch directory)
+20 known atomic lock creations/replacements per trial with equal closing
+index bytes. 20/20 trials undercounted at the cutoff without a loss flag
+(0-17 deduplicated FSEvents lock creations). Even without cutoff filtering,
+18/20 undercounted at flush. Each burst gave one .git vnode notification.
+No content-based exemption was applied.
+
+Git staging regression (disposable checkout, watcher-level)
+Modified LICENSE before arming, then used git add inside the watched
+interval. No keyed working-tree write occurred during the interval.
+Stage: strict vnode-only veto 20/20; closing keys changed in all 20.
+Stage then git reset HEAD -- LICENSE: strict vnode-only veto 20/20;
+opening/closing indexed entries and keys were equal in all 20.
