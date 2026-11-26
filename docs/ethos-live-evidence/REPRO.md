@@ -133,3 +133,58 @@ watcher code was not available to run here. The original arbitrary
 `.git` probe name is outside the described Koch scope. Its final state
 and keys are identical and this fixture itself is not a gate input, but
 the same publication gap affects actual keyed-file notifications too.
+Waiting for a closing key may give FSEvents time to catch up; an event ID
+does not itself prove that every completed filesystem operation has
+already been returned by the watcher.
+
+See [receipts.txt](receipts.txt) for the exact counts. With the mutation
+before the closing key, the modeled Koch cutoff caught every keyed,
+`HEAD`, and `index` trial. With the mutation after that key but before the
+cutoff, the same decision missed in-scope changes. The vnode guard
+deferred for every trial in both windows. A live-verified runner should
+keep FSEvents for coverage flags and use the independently armed guard
+to veto a pass or failure when it records a mutation.
+
+The prototype is fail-closed for these tested changes; it makes no claim
+that watching a live checkout is equivalent to filesystem isolation. The
+Linux-only runner slice at Ethos `46f9e23` is not used for this Mac proof;
+the pinned Darwin follow-up above supplies the actual tree-key functions.
+
+Run the repeated probes only in a disposable clone. They intentionally
+replace and restore the clone's real `HEAD` and `index`:
+
+```bash
+git clone --local --no-hardlinks "$quarry" "$e/probe-checkout"
+git -C "$e/probe-checkout" switch --detach f9ec901be2e7eb5cc562be57d00aff7d43fcb412
+python3 "$e/probe.py" "$e/probe-checkout"
+python3 "$e/probe.py" "$e/probe-checkout" --closing-key
+python3 "$e/probe.py" "$e/probe-checkout" --after-key
+python3 "$e/probe.py" "$e/probe-checkout" --chmod
+```
+
+The fast mode captures an immediate cutoff and verifies the real keys at
+the end of each 20-trial batch. Closing-key mode resamples the actual keys
+after the mutation and before every individual cutoff, and also tests the
+clone's `HEAD` and `index`. The after-key mode tests a mutation in the
+window between the actual closing key and the cutoff. Each probe requires
+the expected vnode path and mutation bit, not merely a concurrent event.
+
+The chmod mode changes and restores a mode bit on a keyed file and the
+clone's index, 20 trials each. It resamples the tree keys after each
+change/restore and explicitly requires the vnode-only verdict to defer
+on a standalone `NOTE_ATTRIB`. To reproduce the clean controls, run
+`python3 "$e/run.py" "$quarry" clean` three times on the real checkout.
+The clean controls at `757566bd4126e455a04c836751f3328bf19033bf` each
+armed 285 vnode descriptors and passed after suppressing an index
+atime-only notification. Both chmod series in the disposable clone
+deferred 20/20 with 229 descriptors. See [receipts.txt](receipts.txt)
+for the individual gate timings.
+
+The gate command is `make check` throughout. The tracked Makefile and check
+set are unchanged. For the check-write probe only, GNU Make's `MAKEFILES`
+loads an external extra prerequisite (`probe.mk`) that writes and restores
+`LICENSE`; all original gate prerequisites still run. This demonstrates
+deferral for a write by the gate process tree without modifying the real
+Makefile. The independent mid-run edit comes from the harness after
+`Running unit tests...` appears.
+
