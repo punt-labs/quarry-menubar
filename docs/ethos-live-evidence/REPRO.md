@@ -137,6 +137,9 @@ in a disposable clone with no pre-existing edits.
   test -f "$probe/injected"
   status=$(git --no-optional-locks status --porcelain)
   test "$status" = ' M LICENSE'
+  cp "$probe/LICENSE" "$probe/expected"
+  printf '\nopening probe %s\n\nmid-run probe %s\n' "$session" "$session" >> "$probe/expected"
+  cmp "$probe/expected" LICENSE
   cp "$probe/LICENSE" LICENSE
   trap - EXIT
   status=$(git --no-optional-locks status --porcelain)
