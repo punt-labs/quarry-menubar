@@ -6,3 +6,10 @@ checks:
     isolation: live-verified
     epoch: quarry-live-v1
     sources: {mode: worktree}
+    path:
+      - /Applications/Xcode.app/Contents/Developer/usr/bin
+      - /opt/homebrew/bin
+    env:
+      USER: ethos
+    system:
+      tools: [make, swiftformat, swiftlint, xcodebuild, xcodegen]
