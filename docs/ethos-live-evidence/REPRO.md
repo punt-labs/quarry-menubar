@@ -188,3 +188,53 @@ deferral for a write by the gate process tree without modifying the real
 Makefile. The independent mid-run edit comes from the harness after
 `Running unit tests...` appears.
 
+## Deferral rate with concurrent Git readers
+
+The harness sets `GIT_OPTIONAL_LOCKS=0` for `make check` and its children,
+not for other sessions. It still defers on `.git/index.lock` activity.
+Repeat clean trials sequentially, saving each receipt even if the
+harness exits nonzero for a deferral:
+
+```bash
+clean_series() {
+  for n in $(seq -w 1 10); do
+    rm -f "$e/clean.json"
+    python3 "$e/run.py" "$quarry" clean || :
+    jq -e '.exit == 0' "$e/clean.json" >/dev/null || return 1
+    mv "$e/clean.json" "$e/$1-$n.json"
+  done
+  jq -s 'group_by([.verdict, .reason]) | map({verdict: .[0].verdict,
+    reason: .[0].reason, trials: length})' "$e/$1"-[0-9][0-9].json
+}
+busy_series() (
+  (
+    while :; do
+      git -C "$quarry" status >/dev/null
+      git -C "$quarry" diff --stat >/dev/null
+      sleep "$((RANDOM % 3 + 1))"
+    done
+  ) &
+  agent=$!
+  trap 'kill "$agent" 2>/dev/null || :; wait "$agent" 2>/dev/null || :' EXIT
+  clean_series "$1"
+)
+clean_series quiet
+(unset GIT_OPTIONAL_LOCKS; busy_series busy)
+(export GIT_OPTIONAL_LOCKS=0; busy_series readonly)
+```
+
+The default-reader trials saw `index.lock` and the `.git` directory
+vnode notification, but no index replacement event. The checked-in
+guard does not treat equal opening and closing index entries as evidence
+that all intermediate versions were seen. In a separate scratch probe,
+we performed 20 atomic `index.lock`-to-`index` replacements per trial,
+took the event-ID cutoff immediately after the burst, and deduplicated
+lock creation records by event ID. FSEvents undercounted on all 20
+trials without reporting loss; the directory vnode did not provide a
+creation count either. A rule that trusts those counts could allow an
+unseen staged version to pass. The strict veto remains in place.
+
+The safer mitigation is to set `GIT_OPTIONAL_LOCKS=0` for read-only
+Git commands in the other sessions, not to ignore observed lock activity.
+See [receipts.txt](receipts.txt) for the measured rates and the strict
+guard's Git staging regressions.
