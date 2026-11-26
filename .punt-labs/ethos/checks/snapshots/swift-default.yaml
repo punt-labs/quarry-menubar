@@ -1,4 +1,5 @@
 # DES-086 live-verified profile; requires Ethos runner support.
+# See docs/ethos-live-evidence/REPRO.md ("Not proven here") for the merge gate.
 checks:
   full-gate:
     profile: linux-worktree-v1

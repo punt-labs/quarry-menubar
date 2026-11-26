@@ -12,6 +12,15 @@ receipt. The sidecar uses the existing `linux-worktree-v1` profile ID with
 needs parser and runner support for this isolation value. No runtime
 bundle is claimed or pinned for live mode; Ethos itself was not changed.
 
+## Not proven here
+
+The Python harness models the live-verified policy around a direct
+`make check` invocation. These receipts do not prove that Ethos loads
+the sidecar or dispatches to the Darwin live-verified runner. Before
+merging, use the real Darwin Ethos handoff entry point with the
+supported runner and show parity for a clean pass and deliberate gate
+failure, plus visible deferral on mutations or uncertain coverage.
+
 ## Results
 
 | Scenario | Verdict | `make check` exit | Gate time |
