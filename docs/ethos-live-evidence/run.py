@@ -11,11 +11,14 @@ from vnode import CHILD_ENTRY, VnodeUnavailable, VnodeWatch, watch_paths
 HERE = Path(__file__).resolve().parent
 ETHOS = Path(os.environ.get("QUARRY_EVIDENCE_ETHOS", Path.home() / "repos/ethos-quarry-evidence"))
 NEW_SOURCE = "new-swift-source"
-SCENARIOS = ("clean", "broken", "mid-run-edit", "dropped-events", "check-writes", NEW_SOURCE)
+SOURCE_PROBES = {
+    NEW_SOURCE: Path("QuarryMenuBar/Views/QuarryHandoffProbe.swift"),
+    "new-root-swift-source": Path("QuarryRootHandoffProbe.swift"),
+}
+SCENARIOS = ("clean", "broken", "mid-run-edit", "dropped-events", "check-writes", *SOURCE_PROBES)
 EDIT = b"\nquarry live evidence probe\n"
 GAP = 0x0F | 0x20 | 0x40 | 0x80
 BROKEN_SOURCE = Path("QuarryMenuBarTests/QuarryMenuBarTests.swift")
-SWIFT_PROBE = Path("QuarryMenuBar/Views/QuarryHandoffProbe.swift")
 LICENSE = Path("LICENSE")
 INJECTED_LOSS = 0x01 | 0x04
 
@@ -109,8 +112,8 @@ def require_cause(root, name, result, log_path):
         valid = verdict == "deferred" and code == 0 and any(
             event["path"] == "<injected>" and event["flags"] == INJECTED_LOSS for event in fsevents
         )
-    elif name == NEW_SOURCE:
-        parent = str(root / SWIFT_PROBE.parent)
+    elif name in SOURCE_PROBES:
+        parent = str(root / SOURCE_PROBES[name].parent)
         valid = verdict == "deferred" and code == 0 and not fsevents and (
             result["before"] == result["after"]
             and any(event["path"] == parent and event["notes"] & CHILD_ENTRY for event in vnode)
@@ -138,7 +141,7 @@ def guarded_scenario(root, name):
         env.update(MAKEFILES=str(HERE / "probe.mk"), QUARRY_EVIDENCE_SCRIPT=__file__)
     log_path = HERE / f"{name}.log"
     with (HERE / f"{name}.watch.stderr").open("w") as watcher_log, VnodeWatch() as guard:
-        watcher = None if name == NEW_SOURCE else subprocess.Popen(
+        watcher = None if name in SOURCE_PROBES else subprocess.Popen(
             [HERE / "watch", root, gitdir],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=watcher_log, text=True,
         )
@@ -154,7 +157,7 @@ def guarded_scenario(root, name):
             with log_path.open("wb") as log:
                 with subprocess.Popen(["make", "check"], cwd=root, env=env,
                                       stdout=log, stderr=subprocess.STDOUT) as gate:
-                    if name in ("mid-run-edit", "dropped-events", NEW_SOURCE):
+                    if name in ("mid-run-edit", "dropped-events", *SOURCE_PROBES):
                         deadline = start + 45
                         while b"Running unit tests..." not in log_path.read_bytes():
                             if gate.poll() is not None or time.monotonic() > deadline:
@@ -164,8 +167,8 @@ def guarded_scenario(root, name):
                             raise RuntimeError("gate already completed before injection")
                         if name == "mid-run-edit":
                             write_probe(root / LICENSE)
-                        elif name == NEW_SOURCE:
-                            fixture = root / SWIFT_PROBE
+                        elif name in SOURCE_PROBES:
+                            fixture = root / SOURCE_PROBES[name]
                             with fixture.open("xb") as source:
                                 try:
                                     source.write(b"// Live-verified evidence probe.\n")

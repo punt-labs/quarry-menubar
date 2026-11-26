@@ -21,7 +21,7 @@ merging, use the real Darwin Ethos handoff entry point with the
 supported runner and show parity for a clean pass and deliberate gate
 failure, plus visible deferral on mutations or uncertain coverage.
 
-## Results
+## Historical results before root child-entry watches
 
 | Scenario | Verdict | `make check` exit | Gate time |
 | --- | --- | ---: | ---: |
@@ -73,12 +73,15 @@ PY
   go test -c -overlay "$e/overlay.json" -o "$e/keys.test" ./internal/hook
 )
 swiftc "$e/watch.swift" -o "$e/watch"
+make -C "$quarry" check
 QUARRY_EVIDENCE_ETHOS="$ethos" python3 "$e/run.py" "$quarry"
 ```
 
 Optional arguments after the Quarry path select
 `clean`, `broken`, `mid-run-edit`, `dropped-events`, `check-writes`, or
-`new-swift-source`.
+`new-swift-source`, or `new-root-swift-source`. The standalone check primes
+the ignored output directories; a fresh checkout may defer if the first
+guarded invocation creates them.
 Each run writes a gate log and a JSON evidence file beside the harness.
 
 ## Closing the transient-event gap
@@ -107,23 +110,26 @@ arming invalidates the evidence. Watches are drained after the closing
 key and FSEvents flush. Inability to arm/read the watches never produces
 a verified result.
 
-`new-swift-source` runs the unchanged gate and creates and removes a
-`.swift` file in `QuarryMenuBar/Views` during the test phase. It does not
-start FSEvents, requires equal opening and closing keys, and requires
-a child-entry vnode note on that exact source directory:
+`new-swift-source` and `new-root-swift-source` run the full gate and create
+and remove a `.swift` file during the test phase, under `QuarryMenuBar/Views`
+and at the checkout root respectively. Neither starts FSEvents. Both require
+equal keys and a child-entry vnode note on the exact parent directory:
 
 ```bash
 for trial in $(seq 1 20); do
-  python3 "$e/run.py" "$quarry" new-swift-source || break
+  python3 "$e/run.py" "$quarry" new-swift-source new-root-swift-source || break
 done
 ```
 
-Root child-entry watches are deliberately strict. With them enabled,
-the clean gate exits 0 but the harness defers: `xcodegen generate`
-replaces `QuarryMenuBar.xcodeproj` and fires the root vnode. A directory
-vnode does not identify the child that changed, so ignoring this note
-could hide a concurrent transient source. Do not treat the earlier
-clean receipts as verified passes with the added root child-entry watch.
+Root child-entry watches remain strict: a directory vnode does not
+identify the child that changed. Previously, regenerating the ignored
+root `QuarryMenuBar.xcodeproj` deferred a successful clean gate. The
+Make targets still regenerate unconditionally, but under the existing
+ignore rule for `build/`; XcodeBuild explicitly uses the project in
+`build/xcodegen/`. Once output directories exist, replacing the generated
+project does not rewrite the checkout root. XcodeGen's `--use-cache`
+was rejected because it kept an independently modified project file
+when the spec and source inventory were unchanged.
 
 The watch budget is the smaller of 4,096 descriptors and half the soft
 `RLIMIT_NOFILE` (4,096 if the soft limit is unlimited). It counts the
@@ -208,8 +214,9 @@ atime-only notification. Both chmod series in the disposable clone
 deferred 20/20 with 229 descriptors. See [receipts.txt](receipts.txt)
 for the individual gate timings.
 
-The gate command is `make check` throughout. The tracked Makefile and check
-set are unchanged. For the check-write probe only, GNU Make's `MAKEFILES`
+The gate command is `make check` throughout. Its format, lint, and test
+requirements and the active check YAML are unchanged. For the check-write
+probe only, GNU Make's `MAKEFILES`
 loads an external extra prerequisite (`probe.mk`) that writes and restores
 `LICENSE`; all original gate prerequisites still run. This demonstrates
 deferral for a write by the gate process tree without modifying the real
