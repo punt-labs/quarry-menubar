@@ -26,7 +26,8 @@ exit codes alone do not establish parity if the failure causes differ.
 
 ## Replay the real Darwin hook
 
-Use a disposable Quarry clone on an Apple Silicon Mac with Xcode at
+Run the replay commands in Bash. Use a disposable Quarry clone on an
+Apple Silicon Mac with Xcode at
 `/Applications/Xcode.app` and the Homebrew SwiftFormat, SwiftLint and
 XcodeGen in `/opt/homebrew/bin`. The sidecar declares these tools and
 sets `USER` for XcodeGen's generated user data. It also puts XCTest's
@@ -55,12 +56,12 @@ git clone https://github.com/punt-labs/quarry-menubar.git "$quarry"
 git -C "$quarry" switch --detach "$quarry_ref"
 test "$(git -C "$quarry" rev-parse HEAD)" = "$quarry_ref"
 cd "$quarry"
-status=$(git --no-optional-locks status --porcelain)
-test -z "$status"
+tree_status=$(git --no-optional-locks status --porcelain)
+test -z "$tree_status"
 env -i HOME="$operator_home" PATH="$PATH" TERM="${TERM:-dumb}" \
   "$e/ethos-live" handoff approve-live swift-default
-status=$(git --no-optional-locks status --porcelain)
-test -z "$status"
+tree_status=$(git --no-optional-locks status --porcelain)
+test -z "$tree_status"
 )
 ```
 
@@ -108,14 +109,14 @@ in a disposable clone with no pre-existing edits.
   probe=$(mktemp -d "$e/mutation.XXXXXXXX")
   session="mutation-${probe##*.}"
   log="$operator_home/.punt-labs/ethos/logs/ethos.log"
-  status=$(git --no-optional-locks status --porcelain)
-  test -z "$status"
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test -z "$tree_status"
   cp LICENSE "$probe/LICENSE"
   writer=
   trap 'if [ -n "$writer" ]; then kill "$writer" 2>/dev/null || :; wait "$writer" || :; fi; cp "$probe/LICENSE" LICENSE' EXIT
   printf '\nopening probe %s\n' "$session" >> LICENSE
-  status=$(git --no-optional-locks status --porcelain)
-  test "$status" = ' M LICENSE'
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test "$tree_status" = ' M LICENSE'
   (
     for ((i=0; i<300; i++)); do
       if awk -v id="session_id=$session " \
@@ -135,15 +136,15 @@ in a disposable clone with no pre-existing edits.
   wait "$writer"
   writer=
   test -f "$probe/injected"
-  status=$(git --no-optional-locks status --porcelain)
-  test "$status" = ' M LICENSE'
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test "$tree_status" = ' M LICENSE'
   cp "$probe/LICENSE" "$probe/expected"
   printf '\nopening probe %s\n\nmid-run probe %s\n' "$session" "$session" >> "$probe/expected"
   cmp "$probe/expected" LICENSE
   cp "$probe/LICENSE" LICENSE
   trap - EXIT
-  status=$(git --no-optional-locks status --porcelain)
-  test -z "$status"
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test -z "$tree_status"
   jq -e '.systemMessage | startswith("handoff checks deferred (full-gate): checkout changed (key mismatch) during the live-verified check at \"LICENSE\".")' \
     "$probe/hook.json"
   cat "$probe/hook.json"
@@ -278,9 +279,9 @@ null gate exit and time in the JSON receipt.
 To reproduce the budget deferral with the same checkout and harness:
 
 ```bash
-status=0
-(ulimit -Sn 256 && python3 "$e/run.py" "$quarry" clean) || status=$?
-test "$status" -eq 1
+probe_exit=0
+(ulimit -Sn 256 && python3 "$e/run.py" "$quarry" clean) || probe_exit=$?
+test "$probe_exit" -eq 1
 jq -e '.verdict == "deferred" and .reason == "keyed set too large for vnode guard"
        and .exit == null and .gate_seconds == null' "$e/clean.json"
 ```
