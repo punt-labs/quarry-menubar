@@ -104,3 +104,32 @@ Mid-run edit, injected loss, and check-written LICENSE: deferred with
 the expected path or loss event, gate exit 0.
 Transient Swift addition: 20/20 deferred, exit 0, 8.30-9.50s;
 FSEvents not started; equal keys and Views NOTE_WRITE in all trials.
+
+Nested XcodeGen output (arm64 Mac, final all-scenario run at b3c742e)
+Before the move, the only root child named by FSEvents in a primed check
+was QuarryMenuBar.xcodeproj; the root vnode reported notes 18. Xcode
+also wrote inside DerivedData, which it did not replace. With output
+under build/xcodegen, both build/ and DerivedData/ were absent in a
+fresh clone: check exit 0 in 27.08s, strict root notes 18, deferred.
+After priming (202ccd3), clean passed 10/10 in 9.18-12.56s with equal
+keys and no vetoes. Transient root Swift addition deferred 20/20 in
+8.86-10.11s, with equal keys and only the root vnode (FSEvents off).
+
+All-scenario run, 380 vnode watches and equal keys in each case:
+  clean                  pass      exit 0   9.43s  no veto
+  broken                 fail      exit 2   0.05s  SwiftFormat consecutiveSpaces
+  broken-xctest          fail      exit 2  17.11s  named ContentPanelTests failure
+  mid-run-edit           deferred  exit 0  10.43s  LICENSE event
+  dropped-events         deferred  exit 0   8.94s  injected loss flags
+  check-writes           deferred  exit 0   9.53s  LICENSE event and write receipt
+  new-swift-source       deferred  exit 0   9.10s  Views vnode, FSEvents off
+  new-root-swift-source  deferred  exit 0   9.34s  root vnode, FSEvents off
+Standalone check passed in 10.96s. Xcode summary: 133 passed, 0 failed,
+1 skipped. With the XCTFail fixture, Xcode exited 65 and xcresult
+confirmed its message, with 132 passed, 1 failed, and 1 skipped.
+
+XcodeGen 2.48.0 --use-cache stored its cache under ~/.xcodegen/cache.
+It regenerated for a changed spec, a source addition/removal and a
+missing project, but reported a cache hit on a modified project.pbxproj.
+Uncached nested generation repaired that stale project and passed all
+the spec, source inventory and missing-project checks.
