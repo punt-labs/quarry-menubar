@@ -14,11 +14,13 @@ bundle is claimed or pinned for live mode; Ethos itself was not changed.
 ## Not proven here
 
 The Python harness models the policy around a direct `make check`.
-The real Darwin hook at Ethos `772a20f` loads and runs the approved
-sidecar. The Python harness results below are not hook results; see
-[receipts.txt](receipts.txt) for the real-hook verdicts and remaining
-merge gate. Matching exit codes alone do not establish parity if the
-failure causes differ.
+Real-hook parity was verified on Ethos
+`devin/1795658354-darwin-worktree-runner` at
+`772a20fb067df2eb29b41f175c01c3debc73c6c7`; contributors need an
+Ethos release containing the Darwin live-verified slice. Until then,
+released hooks reject the sidecar or defer the gate.
+See [receipts.txt](receipts.txt) for the real-hook verdicts. Matching
+exit codes alone do not establish parity if the failure causes differ.
 
 ## Replay the real Darwin hook
 
