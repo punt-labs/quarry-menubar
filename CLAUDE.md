@@ -12,7 +12,7 @@ Both repos share the same development workflow conventions (branch discipline, m
 
 ## XcodeGen Toolchain
 
-The project uses **XcodeGen** to generate `.xcodeproj` from `project.yml`. **Never edit the Xcode project directly** — it is gitignored and regenerated on every build.
+The project uses **XcodeGen** to generate `build/xcodegen/QuarryMenuBar.xcodeproj` from `project.yml` when invoked through Make. **Never edit the Xcode project directly** — it is gitignored and regenerated on every build.
 
 ```bash
 brew install xcodegen swiftformat swiftlint   # One-time setup
@@ -47,7 +47,7 @@ make all         # generate + format + lint + build + test
 make clean       # Remove DerivedData
 ```
 
-Single test file: `xcodebuild test -scheme QuarryMenuBar -destination 'platform=macOS' -only-testing:QuarryMenuBarTests/QuarryClientTests`
+Single test file (after `make generate`): `xcodebuild test -project build/xcodegen/QuarryMenuBar.xcodeproj -scheme QuarryMenuBar -destination 'platform=macOS' -only-testing:QuarryMenuBarTests/QuarryClientTests`
 
 Quality gates before every commit: `make check`. Use `make format` to fix
 formatting explicitly; the gate does not rewrite source.
