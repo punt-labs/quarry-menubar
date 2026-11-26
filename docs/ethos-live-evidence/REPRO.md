@@ -78,10 +78,13 @@ QUARRY_EVIDENCE_ETHOS="$ethos" python3 "$e/run.py" "$quarry"
 ```
 
 Optional arguments after the Quarry path select
-`clean`, `broken`, `mid-run-edit`, `dropped-events`, `check-writes`, or
+`clean`, `broken`, `broken-xctest`, `mid-run-edit`, `dropped-events`, `check-writes`,
 `new-swift-source`, or `new-root-swift-source`. The standalone check primes
 the ignored output directories; a fresh checkout may defer if the first
-guarded invocation creates them.
+guarded invocation creates them. `broken` asserts the SwiftFormat fixture
+failure. `broken-xctest` asserts that XcodeBuild exits 65 on the deliberately
+failing `ContentPanelTests.testContentPanelInitializesWhenConnected()`.
+GNU Make reports either failed recipe as exit 2.
 Each run writes a gate log and a JSON evidence file beside the harness.
 
 ## Closing the transient-event gap
@@ -127,7 +130,9 @@ root `QuarryMenuBar.xcodeproj` deferred a successful clean gate. The
 Make targets still regenerate unconditionally, but under the existing
 ignore rule for `build/`; XcodeBuild explicitly uses the project in
 `build/xcodegen/`. Once output directories exist, replacing the generated
-project does not rewrite the checkout root. XcodeGen's `--use-cache`
+project does not rewrite the checkout root. Xcode also writes under
+`DerivedData/`, but does not replace that directory in a primed tree.
+XcodeGen's `--use-cache`
 was rejected because it kept an independently modified project file
 when the spec and source inventory were unchanged.
 

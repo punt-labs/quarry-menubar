@@ -10,15 +10,18 @@ from vnode import CHILD_ENTRY, VnodeUnavailable, VnodeWatch, watch_paths
 
 HERE = Path(__file__).resolve().parent
 ETHOS = Path(os.environ.get("QUARRY_EVIDENCE_ETHOS", Path.home() / "repos/ethos-quarry-evidence"))
+BROKEN_XCTEST = "broken-xctest"
 NEW_SOURCE = "new-swift-source"
 SOURCE_PROBES = {
     NEW_SOURCE: Path("QuarryMenuBar/Views/QuarryHandoffProbe.swift"),
     "new-root-swift-source": Path("QuarryRootHandoffProbe.swift"),
 }
-SCENARIOS = ("clean", "broken", "mid-run-edit", "dropped-events", "check-writes", *SOURCE_PROBES)
+SCENARIOS = ("clean", "broken", BROKEN_XCTEST, "mid-run-edit", "dropped-events", "check-writes", *SOURCE_PROBES)
 EDIT = b"\nquarry live evidence probe\n"
 GAP = 0x0F | 0x20 | 0x40 | 0x80
 BROKEN_SOURCE = Path("QuarryMenuBarTests/QuarryMenuBarTests.swift")
+XCTEST_ANCHOR = b"        XCTAssertNotNil(panel.body)\n"
+XCTEST_FAILURE = b'        XCTFail("Deliberately broken handoff parity probe")\n'
 LICENSE = Path("LICENSE")
 INJECTED_LOSS = 0x01 | 0x04
 
@@ -107,6 +110,14 @@ def require_cause(root, name, result, log_path):
         valid = verdict == "fail" and code == 2 and (
             re.search(diagnostic, log, re.MULTILINE) is not None
             and "Source input did not pass lint check." in log
+        )
+    elif name == BROKEN_XCTEST:
+        log = log_path.read_text(errors="replace")
+        diagnostic = r"^Failing tests:\n\s+ContentPanelTests\.testContentPanelInitializesWhenConnected\(\)$"
+        test_exit = r"^make: \*\*\* \[(?:[^\]\n]*: )?test\] Error 65$"
+        valid = verdict == "fail" and code == 2 and (
+            re.search(diagnostic, log, re.MULTILINE) is not None
+            and re.search(test_exit, log, re.MULTILINE) is not None
         )
     elif name == "dropped-events":
         valid = verdict == "deferred" and code == 0 and any(
@@ -222,16 +233,22 @@ if __name__ == "__main__":
                 raise ValueError(f"unknown scenario: {name}")
             if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
                 raise RuntimeError("start from a clean checkout")
-            if name == "broken":
+            if name in ("broken", BROKEN_XCTEST):
                 path = root / BROKEN_SOURCE
-                size = path.stat().st_size
+                original = path.read_bytes()
+                if name == "broken":
+                    fixture = original + b"\nlet   quarryHandoffFormatProbe=0\n"
+                else:
+                    if original.count(XCTEST_ANCHOR) != 1:
+                        raise RuntimeError("expected exactly one XCTest fixture insertion point")
+                    fixture = original.replace(XCTEST_ANCHOR, XCTEST_ANCHOR + XCTEST_FAILURE)
                 try:
-                    mutate(path, b"\nlet   quarryHandoffFormatProbe=0\n")
+                    path.write_bytes(fixture)
                     # This deliberately dirty input is setup, before the guarded interval.
                     time.sleep(0.3)
                     scenario(root, name)
                 finally:
-                    os.truncate(path, size)
+                    path.write_bytes(original)
             else:
                 scenario(root, name)
             if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
