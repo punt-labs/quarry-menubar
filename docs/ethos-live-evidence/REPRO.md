@@ -45,9 +45,9 @@ one existing skip.
 
 ## Reproduce
 
-Use a dedicated clean Mac checkout at the Quarry commit above and the
-standard repo tools. Copy the helpers into a directory outside the
-checkout so the evidence will not become a new keyed input. The overlay
+Use a dedicated clean Mac checkout of this branch and the standard repo
+tools. The commit IDs in receipts identify the historical runs. Copy the
+helpers outside the checkout so the evidence does not become a keyed input. The overlay
 adds a test only to the compiler's view; it does not change Ethos files.
 
 ```bash
@@ -77,7 +77,8 @@ QUARRY_EVIDENCE_ETHOS="$ethos" python3 "$e/run.py" "$quarry"
 ```
 
 Optional arguments after the Quarry path select
-`clean`, `broken`, `mid-run-edit`, `dropped-events`, or `check-writes`.
+`clean`, `broken`, `mid-run-edit`, `dropped-events`, `check-writes`, or
+`new-swift-source`.
 Each run writes a gate log and a JSON evidence file beside the harness.
 
 ## Closing the transient-event gap
@@ -96,14 +97,33 @@ which internal FSEvents stage buffered the event.
 The harness keeps the original FSEvents path and coverage checks, now with
 a second, independent `EVFILT_VNODE` guard. It opens the keyed files and their
 ancestor directories, the checkout's `.git` entry, and the complete
-worktree-local Git directory. Ancestor watches catch path replacement,
-without deferring for ordinary ignored child creation by XcodeGen. Git
-directory watches include child changes: creating and removing a name
-sets `NOTE_WRITE` even when no callback names the vanished child.
+worktree-local Git directory. Ancestor watches catch path replacement;
+the root and directories directly containing keyed files also watch
+child entries for `NOTE_WRITE` and `NOTE_EXTEND`. Git directory watches
+include child changes: creating and removing a name sets `NOTE_WRITE`
+even when no callback names the vanished child.
 Successful arming precedes the starting key; a changed inventory while
 arming invalidates the evidence. Watches are drained after the closing
 key and FSEvents flush. Inability to arm/read the watches never produces
 a verified result.
+
+`new-swift-source` runs the unchanged gate and creates and removes a
+`.swift` file in `QuarryMenuBar/Views` during the test phase. It does not
+start FSEvents, requires equal opening and closing keys, and requires
+a child-entry vnode note on that exact source directory:
+
+```bash
+for trial in $(seq 1 20); do
+  python3 "$e/run.py" "$quarry" new-swift-source || break
+done
+```
+
+Root child-entry watches are deliberately strict. With them enabled,
+the clean gate exits 0 but the harness defers: `xcodegen generate`
+replaces `QuarryMenuBar.xcodeproj` and fires the root vnode. A directory
+vnode does not identify the child that changed, so ignoring this note
+could hide a concurrent transient source. Do not treat the earlier
+clean receipts as verified passes with the added root child-entry watch.
 
 The watch budget is the smaller of 4,096 descriptors and half the soft
 `RLIMIT_NOFILE` (4,096 if the soft limit is unlimited). It counts the
@@ -164,7 +184,6 @@ replace and restore the clone's real `HEAD` and `index`:
 
 ```bash
 git clone --local --no-hardlinks "$quarry" "$e/probe-checkout"
-git -C "$e/probe-checkout" switch --detach f9ec901be2e7eb5cc562be57d00aff7d43fcb412
 python3 "$e/probe.py" "$e/probe-checkout"
 python3 "$e/probe.py" "$e/probe-checkout" --closing-key
 python3 "$e/probe.py" "$e/probe-checkout" --after-key

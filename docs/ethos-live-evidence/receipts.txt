@@ -94,3 +94,13 @@ interval. No keyed working-tree write occurred during the interval.
 Stage: strict vnode-only veto 20/20; closing keys changed in all 20.
 Stage then git reset HEAD -- LICENSE: strict vnode-only veto 20/20;
 opening/closing indexed entries and keys were equal in all 20.
+
+Strict child-entry watch and cause checks (Mac checkout at 796c0ce)
+Clean make check: exit 0 in 9.64s; harness deferred on root vnode notes
+18 (NOTE_WRITE | NOTE_LINK), equal keys, 347 fds. Isolated xcodegen
+generate reproduced notes 18 and FSEvents named QuarryMenuBar.xcodeproj.
+Broken: exit 2 in 0.05s; SwiftFormat consecutiveSpaces on fixture.
+Mid-run edit, injected loss, and check-written LICENSE: deferred with
+the expected path or loss event, gate exit 0.
+Transient Swift addition: 20/20 deferred, exit 0, 8.30-9.50s;
+FSEvents not started; equal keys and Views NOTE_WRITE in all trials.

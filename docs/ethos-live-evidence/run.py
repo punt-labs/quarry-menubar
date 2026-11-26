@@ -6,14 +6,16 @@ import subprocess
 import sys
 import time
 
-from vnode import VnodeUnavailable, VnodeWatch, watch_paths
+from vnode import CHILD_ENTRY, VnodeUnavailable, VnodeWatch, watch_paths
 
 HERE = Path(__file__).resolve().parent
 ETHOS = Path(os.environ.get("QUARRY_EVIDENCE_ETHOS", Path.home() / "repos/ethos-quarry-evidence"))
-SCENARIOS = ("clean", "broken", "mid-run-edit", "dropped-events", "check-writes")
+NEW_SOURCE = "new-swift-source"
+SCENARIOS = ("clean", "broken", "mid-run-edit", "dropped-events", "check-writes", NEW_SOURCE)
 EDIT = b"\nquarry live evidence probe\n"
 GAP = 0x0F | 0x20 | 0x40 | 0x80
 BROKEN_SOURCE = Path("QuarryMenuBarTests/QuarryMenuBarTests.swift")
+SWIFT_PROBE = Path("QuarryMenuBar/Views/QuarryHandoffProbe.swift")
 LICENSE = Path("LICENSE")
 INJECTED_LOSS = 0x01 | 0x04
 
@@ -107,6 +109,12 @@ def require_cause(root, name, result, log_path):
         valid = verdict == "deferred" and code == 0 and any(
             event["path"] == "<injected>" and event["flags"] == INJECTED_LOSS for event in fsevents
         )
+    elif name == NEW_SOURCE:
+        parent = str(root / SWIFT_PROBE.parent)
+        valid = verdict == "deferred" and code == 0 and not fsevents and (
+            result["before"] == result["after"]
+            and any(event["path"] == parent and event["notes"] & CHILD_ENTRY for event in vnode)
+        )
     else:
         target = str(root / LICENSE)
         valid = verdict == "deferred" and code == 0 and any(
@@ -130,12 +138,12 @@ def guarded_scenario(root, name):
         env.update(MAKEFILES=str(HERE / "probe.mk"), QUARRY_EVIDENCE_SCRIPT=__file__)
     log_path = HERE / f"{name}.log"
     with (HERE / f"{name}.watch.stderr").open("w") as watcher_log, VnodeWatch() as guard:
-        watcher = subprocess.Popen(
+        watcher = None if name == NEW_SOURCE else subprocess.Popen(
             [HERE / "watch", root, gitdir],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=watcher_log, text=True,
         )
         try:
-            if watcher.stdout.readline().strip() != "ready":
+            if watcher is not None and watcher.stdout.readline().strip() != "ready":
                 raise RuntimeError("failed to start FSEvents")
             inventory = keys(root)
             guard.arm(watch_paths(root, inventory["paths"], gitdir))
@@ -146,7 +154,7 @@ def guarded_scenario(root, name):
             with log_path.open("wb") as log:
                 with subprocess.Popen(["make", "check"], cwd=root, env=env,
                                       stdout=log, stderr=subprocess.STDOUT) as gate:
-                    if name in ("mid-run-edit", "dropped-events"):
+                    if name in ("mid-run-edit", "dropped-events", NEW_SOURCE):
                         deadline = start + 45
                         while b"Running unit tests..." not in log_path.read_bytes():
                             if gate.poll() is not None or time.monotonic() > deadline:
@@ -156,6 +164,13 @@ def guarded_scenario(root, name):
                             raise RuntimeError("gate already completed before injection")
                         if name == "mid-run-edit":
                             write_probe(root / LICENSE)
+                        elif name == NEW_SOURCE:
+                            fixture = root / SWIFT_PROBE
+                            with fixture.open("xb") as source:
+                                try:
+                                    source.write(b"// Live-verified evidence probe.\n")
+                                finally:
+                                    fixture.unlink()
                         else:
                             watcher.stdin.write("drop\n")
                             watcher.stdin.flush()
@@ -166,13 +181,15 @@ def guarded_scenario(root, name):
                     code = gate.wait()
             elapsed = round(time.monotonic() - start, 2)
             after = keys(root)
-            output, _ = watcher.communicate("finish\n", timeout=15)
-            if watcher.returncode != 0:
-                raise RuntimeError("FSEvents watcher failed")
-            events = json.loads(output)
+            events = []
+            if watcher is not None:
+                output, _ = watcher.communicate("finish\n", timeout=15)
+                if watcher.returncode != 0:
+                    raise RuntimeError("FSEvents watcher failed")
+                events = json.loads(output)
             vnode_events = guard.events()
         finally:
-            if watcher.poll() is None:
+            if watcher is not None and watcher.poll() is None:
                 watcher.kill()
                 watcher.wait()
     verdict, reason, relevant = decide(root, gitdir, before, after, events, vnode_events, code)

@@ -8,6 +8,7 @@ NOTES = (
     | select.KQ_NOTE_DELETE | select.KQ_NOTE_LINK | select.KQ_NOTE_RENAME | select.KQ_NOTE_REVOKE
 )
 REPLACED = select.KQ_NOTE_DELETE | select.KQ_NOTE_RENAME | select.KQ_NOTE_REVOKE
+CHILD_ENTRY = select.KQ_NOTE_WRITE | select.KQ_NOTE_EXTEND
 MAX_WATCH_FDS = 4096
 STABLE = (
     "st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns",
@@ -24,12 +25,13 @@ def raise_walk_error(error):
 
 
 def watch_paths(root, keyed, gitdir):
-    paths = {root: REPLACED}
+    paths = {root: REPLACED | CHILD_ENTRY}
     for name in keyed:
         path = root / name
         for parent in path.parents:
             if root in parent.parents:
                 paths.setdefault(parent, REPLACED)
+        paths[path.parent] |= CHILD_ENTRY
         paths[path] = NOTES
     paths[root / ".git"] = NOTES
     paths[gitdir] = NOTES
