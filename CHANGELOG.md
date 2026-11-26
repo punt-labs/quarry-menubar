@@ -8,20 +8,13 @@ All notable changes to this project will be documented in this file.
 
 - Make targets regenerate the Xcode project under `build/xcodegen/` so
   generation no longer rewrites the checkout root on each check.
-- Generated agents report file-scoped Swift and shell checks after edits.
-  Staged Swift checks gate commits, and the full read-only source check gates
-  agent handoff.
-- Vendor the gstack ethos team under `.punt-labs/ethos/` and set
-  `resolution: repo-only`, so a fresh clone resolves its ethos identities
-  without the retired team-registry submodule or a global store.
 
-### Fixed
+### Removed
 
-- Agent files for handles not on the repo's ethos team were removed. The repo
-  now has its own `quarry-menubar` team: the gstack roles plus `claude` and the
-  specialists CLAUDE.md delegates to (`adb`, `csl`, `dna`, `edt`, `mdm`, `rmh`,
-  `srn`), whose agent files stay.
-- ethos config resolves layered again so the engineering team, seeded pipelines and the claude leader identity resolve alongside the vendored gstack team
+- Ethos is removed from this repository for now: the vendored `.punt-labs/ethos/`
+  files, `.punt-labs/ethos.yaml`, the 13 generated `.claude/agents/` files, the
+  Ethos section of `CONTRIBUTING.md`, and the "Ethos & Delegation" section of
+  `CLAUDE.md`.
 
 ## [0.6.3] - 2026-08-23
 
