@@ -75,3 +75,89 @@ def decide(root, gitdir, before, after, events, vnode_events, code):
     return verdict, reason, relevant
 
 
+def scenario(root, name):
+    try:
+        guarded_scenario(root, name)
+    except VnodeUnavailable as error:
+        result = {
+            "scenario": name, "verdict": "deferred", "reason": str(error),
+            "exit": None, "gate_seconds": None,
+        }
+        (HERE / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")
+        raise SystemExit(f"{name}: deferred: {error} (gate not run)") from None
+
+
+def guarded_scenario(root, name):
+    env = dict(os.environ)
+    for key in ("MAKEFLAGS", "MFLAGS", "MAKEFILES", "GNUMAKEFLAGS"):
+        env.pop(key, None)
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    gitdir = Path(git(root, "rev-parse", "--absolute-git-dir")).resolve(strict=True)
+    if name == "check-writes":
+        env.update(MAKEFILES=str(HERE / "probe.mk"), QUARRY_EVIDENCE_SCRIPT=__file__)
+    log_path = HERE / f"{name}.log"
+    with (HERE / f"{name}.watch.stderr").open("w") as watcher_log, VnodeWatch() as guard:
+        watcher = subprocess.Popen(
+            [HERE / "watch", root, gitdir],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=watcher_log, text=True,
+        )
+        try:
+            if watcher.stdout.readline().strip() != "ready":
+                raise RuntimeError("failed to start FSEvents")
+            inventory = keys(root)
+            guard.arm(watch_paths(root, inventory["paths"], gitdir))
+            before = keys(root)
+            if inventory != before:
+                raise RuntimeError("deferred: checkout changed while arming vnode watches")
+            start = time.monotonic()
+            with log_path.open("wb") as log:
+                with subprocess.Popen(["make", "check"], cwd=root, env=env,
+                                      stdout=log, stderr=subprocess.STDOUT) as gate:
+                    if name in ("mid-run-edit", "dropped-events"):
+                        deadline = start + 45
+                        while b"Running unit tests..." not in log_path.read_bytes():
+                            if gate.poll() is not None or time.monotonic() > deadline:
+                                raise RuntimeError("did not reach Xcode while gate was running")
+                            time.sleep(0.02)
+                        if gate.poll() is not None:
+                            raise RuntimeError("gate already completed before injection")
+                        if name == "mid-run-edit":
+                            write_probe(root / "LICENSE")
+                        else:
+                            watcher.stdin.write("drop\n")
+                            watcher.stdin.flush()
+                            if watcher.stdout.readline().strip() != "injected":
+                                raise RuntimeError("loss injection was not acknowledged")
+                        if gate.poll() is not None:
+                            raise RuntimeError("gate already completed during injection")
+                    code = gate.wait()
+            elapsed = round(time.monotonic() - start, 2)
+            after = keys(root)
+            output, _ = watcher.communicate("finish\n", timeout=15)
+            if watcher.returncode != 0:
+                raise RuntimeError("FSEvents watcher failed")
+            events = json.loads(output)
+            vnode_events = guard.events()
+        finally:
+            if watcher.poll() is None:
+                watcher.kill()
+                watcher.wait()
+    verdict, reason, relevant = decide(root, gitdir, before, after, events, vnode_events, code)
+    result = {
+        "scenario": name, "verdict": verdict, "reason": reason,
+        "exit": code, "gate_seconds": elapsed, "head": git(root, "rev-parse", "HEAD"),
+        "gitdir": str(gitdir), "before": before, "after": after,
+        "relevant_events": relevant, "vnode_events": vnode_events,
+        "vnode_fds": len(guard.paths), "atime_only_vnode_events": guard.atime_only,
+        "ignored_event_count": len(events) - len(relevant),
+    }
+    (HERE / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")
+    print(f"{name}: {verdict}, exit {code}, {elapsed:.2f}s, "
+          f"FSEvents={len(relevant)}, vnode events={len(vnode_events)}, "
+          f"vnode fds={len(guard.paths)}, atime-only={len(guard.atime_only)}, "
+          f"keys equal={before == after}", flush=True)
+    expected = {"clean": "pass", "broken": "fail"}.get(name, "deferred")
+    if verdict != expected or (name != "broken" and code != 0):
+        raise RuntimeError(f"expected {expected} ({name}); see {log_path}")
+
+
