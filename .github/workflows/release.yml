@@ -59,7 +59,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: make generate
 
       - name: Run unit tests (release gate)
         # Gate the release on tests: a tagged commit with failing tests must
@@ -68,6 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild test \
+            -project build/xcodegen/QuarryMenuBar.xcodeproj \
             -scheme QuarryMenuBar \
             -destination 'platform=macOS' \
             -derivedDataPath build \
@@ -78,6 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild build \
+            -project build/xcodegen/QuarryMenuBar.xcodeproj \
             -scheme QuarryMenuBar \
             -configuration Release \
             -destination 'generic/platform=macOS' \

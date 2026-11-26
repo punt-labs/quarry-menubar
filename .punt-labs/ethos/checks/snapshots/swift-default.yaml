@@ -1,0 +1,16 @@
+# DES-086 live-verified profile; requires Ethos runner support.
+# See docs/ethos-live-evidence/REPRO.md ("Not proven here") for the merge gate.
+checks:
+  full-gate:
+    profile: linux-worktree-v1
+    isolation: live-verified
+    epoch: quarry-live-v1
+    sources: {mode: worktree}
+    path:
+      - /Applications/Xcode.app/Contents/Developer/usr/bin
+      - /opt/homebrew/bin
+    env:
+      TEST_DERIVED_DATA: "{scratch}/DerivedData"
+      USER: ethos
+    system:
+      tools: [make, swiftformat, swiftlint, xcodebuild, xcodegen]

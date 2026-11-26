@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Make targets regenerate the Xcode project under `build/xcodegen/` so
+  generation no longer rewrites the checkout root on each check.
 - Generated agents report file-scoped Swift and shell checks after edits.
   Staged Swift checks gate commits, and the full read-only source check gates
   agent handoff.

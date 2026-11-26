@@ -4,6 +4,9 @@
 SCHEME = QuarryMenuBar
 DESTINATION = platform=macOS
 DERIVED_DATA = ./DerivedData
+TEST_DERIVED_DATA ?= $(DERIVED_DATA)
+PROJECT_DIR = build/xcodegen
+PROJECT = $(PROJECT_DIR)/$(SCHEME).xcodeproj
 
 .PHONY: help generate build test clean lint format format-check check all run version bump-patch bump-minor bump-major bump-build
 
@@ -29,9 +32,12 @@ help:
 	@echo "    make bump-minor  - Bump minor version (0.1.0 -> 0.2.0)"
 	@echo "    make bump-major  - Bump major version (0.1.0 -> 1.0.0)"
 
+# XcodeGen emits project-relative paths for the app plist and entitlements.
 generate:
 	@echo "Generating Xcode project..."
-	xcodegen generate
+	@mkdir -p "$(PROJECT_DIR)"
+	@ln -sfn "$(CURDIR)/QuarryMenuBar" "$(PROJECT_DIR)/QuarryMenuBar"
+	xcodegen generate --project "$(PROJECT_DIR)"
 
 format:
 	@echo "Running SwiftFormat..."
@@ -59,6 +65,7 @@ lint:
 build: generate format lint
 	@echo "Building $(SCHEME)..."
 	xcodebuild build \
+		-project "$(PROJECT)" \
 		-scheme $(SCHEME) \
 		-destination '$(DESTINATION)' \
 		-derivedDataPath $(DERIVED_DATA) \
@@ -67,21 +74,23 @@ build: generate format lint
 test: generate
 	@echo "Running unit tests..."
 	@xcodebuild test \
+		-project "$(PROJECT)" \
 		-scheme $(SCHEME) \
 		-destination '$(DESTINATION)' \
-		-derivedDataPath $(DERIVED_DATA) \
+		-derivedDataPath "$(TEST_DERIVED_DATA)" \
 		-only-testing:QuarryMenuBarTests \
 		-quiet
 
 clean:
 	@echo "Cleaning..."
-	xcodebuild clean -scheme $(SCHEME) -derivedDataPath $(DERIVED_DATA) -quiet 2>/dev/null || true
+	xcodebuild clean -project "$(PROJECT)" -scheme $(SCHEME) -derivedDataPath $(DERIVED_DATA) -quiet 2>/dev/null || true
 	rm -rf $(DERIVED_DATA)
 	@echo "Clean complete."
 
 coverage: generate
 	@echo "Running unit tests with coverage..."
 	@xcodebuild test \
+		-project "$(PROJECT)" \
 		-scheme $(SCHEME) \
 		-destination '$(DESTINATION)' \
 		-derivedDataPath $(DERIVED_DATA) \

@@ -1,0 +1,227 @@
+Quarry: f9ec901be2e7eb5cc562be57d00aff7d43fcb412
+Ethos:  7fa2922b6d420bbddede15563fc530f526b1e4a8
+
+Original stream diagnostic: matched path events (out of 10), zero loss flags
+Roots            Startup wait  Mutation hold  Post-op wait  Matched
+checkout + .git             0              0             0        3
+checkout + .git         150ms              0             0        0
+checkout + .git             0              0         150ms       10
+checkout + .git             0          150ms             0        5
+checkout + .git         150ms              0         150ms        9
+.git only                   0              0             0        2
+.git only               150ms              0             0        1
+.git only                   0              0         150ms        9
+.git only                   0          150ms             0        7
+.git only               150ms              0         150ms       10
+
+Guarded make check (equal before/after keys within each run)
+clean: pass, exit 0, 10.32s, FSEvents=0, vnode events=0
+broken: fail, exit 2, 0.14s, FSEvents=0, vnode events=0
+mid-run-edit: deferred, exit 0, 13.87s, FSEvents=2, vnode events=1
+dropped-events: deferred, exit 0, 10.09s, FSEvents=1, vnode events=0
+check-writes: deferred, exit 0, 11.19s, FSEvents=2, vnode events=1
+
+Immediate cutoff (equal before/after keys per batch)
+git-create-remove: FSEvents-only 8/20; scoped cutoff 0/20; guarded 20/20
+git-rename-in-out: FSEvents-only 2/20; scoped cutoff 0/20; guarded 20/20
+keyed:write-restore: FSEvents-only 6/20; scoped cutoff 0/20; guarded 20/20
+keyed:replace-restore: FSEvents-only 5/20; scoped cutoff 3/20; guarded 20/20
+
+Mutation before closing key (equal before/after keys per trial)
+git-create-remove: FSEvents-only 20/20; scoped cutoff 0/20; guarded 20/20
+git-rename-in-out: FSEvents-only 20/20; scoped cutoff 0/20; guarded 20/20
+keyed:write-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+keyed:replace-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+HEAD:write-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+HEAD:replace-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+index:write-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+index:replace-restore: FSEvents-only 20/20; scoped cutoff 20/20; guarded 20/20
+
+Mutation after closing key but before cutoff (equal keys per batch)
+keyed:write-restore: FSEvents-only 7/20; scoped cutoff 7/20; guarded 20/20
+HEAD:replace-restore: FSEvents-only 17/20; scoped cutoff 17/20; guarded 20/20
+index:replace-restore: FSEvents-only 16/20; scoped cutoff 16/20; guarded 20/20
+
+In the three probe groups above, counts give verdicts of "deferred".
+Every guarded deferral had the expected vnode path and mutation flag.
+
+NOTE_ATTRIB controls
+Clean checkout HEAD: 757566bd4126e455a04c836751f3328bf19033bf
+Each run had equal keys and suppressed one .git/index atime-only event.
+1: pass, exit 0, 10.37s, FSEvents=0, vnode events=0, vnode fds=285, atime-only=5
+2: pass, exit 0, 9.14s, FSEvents=0, vnode events=0, vnode fds=285, atime-only=5
+3: pass, exit 0, 9.59s, FSEvents=0, vnode events=0, vnode fds=285, atime-only=5
+
+Chmod and restore (disposable clone at f9ec901, equal keys per trial)
+LICENSE: vnode-only deferred 20/20; 229 fds; standalone NOTE_ATTRIB
+.git/index: vnode-only deferred 20/20; 229 fds; standalone NOTE_ATTRIB
+
+Descriptor-budget controls (real checkout HEAD 786f39a524fe80e3c6e894077fe74ea51a7c4e19)
+Soft RLIMIT_NOFILE=256 (128-watch budget): harness exit 1, deferred:
+keyed set too large for vnode guard (gate not run)
+Injected EMFILE on second vnode path open: deferred: cannot arm vnode guard:
+[Errno 24] Too many open files. Gate not run; first watch descriptor closed.
+Normal limit, first trial: deferred, gate exit 0 in 11.19s; FSEvents saw
+index.lock and the .git directory vnode fired; keys equal.
+Normal limit, isolated retry: pass, exit 0, 9.51s, FSEvents=0,
+vnode events=0, vnode fds=303, atime-only=5, keys equal.
+Chmod regression: keyed file and .git/index each deferred on vnode alone
+20/20 with 229 watch descriptors.
+
+Clean deferral rate with GIT_OPTIONAL_LOCKS=0 in make check
+Real checkout HEAD: 6c416f2b6eda4dfaad1cc6b0bccd047a47454dab
+All gates exited 0, all key pairs were equal, and every guard watched 317 fds.
+Quiet, no background Git: 0/10 deferred (8.37-8.84s).
+Background git status + git diff --stat every 1-3s, default optional locks:
+10/10 deferred (8.46-9.42s). Each saw only index.lock FSEvents and a .git
+vnode write. The actor ran 62 command pairs; the watcher reported 57 lock
+records, not a reliable count of individual operations.
+Same background commands with GIT_OPTIONAL_LOCKS=0 in the actor:
+0/10 deferred (8.44-12.45s), no veto events, 76 command pairs.
+Check-written keyed file regression: deferred, exit 0 in 9.64s; two
+FSEvents and one vnode veto.
+
+Index observation counterexample (disposable scratch directory)
+20 known atomic lock creations/replacements per trial with equal closing
+index bytes. 20/20 trials undercounted at the cutoff without a loss flag
+(0-17 deduplicated FSEvents lock creations). Even without cutoff filtering,
+18/20 undercounted at flush. Each burst gave one .git vnode notification.
+No content-based exemption was applied.
+
+Git staging regression (disposable checkout, watcher-level)
+Modified LICENSE before arming, then used git add inside the watched
+interval. No keyed working-tree write occurred during the interval.
+Stage: strict vnode-only veto 20/20; closing keys changed in all 20.
+Stage then git reset HEAD -- LICENSE: strict vnode-only veto 20/20;
+opening/closing indexed entries and keys were equal in all 20.
+
+Strict child-entry watch and cause checks (Mac checkout at 796c0ce)
+Clean make check: exit 0 in 9.64s; harness deferred on root vnode notes
+18 (NOTE_WRITE | NOTE_LINK), equal keys, 347 fds. Isolated xcodegen
+generate reproduced notes 18 and FSEvents named QuarryMenuBar.xcodeproj.
+Broken: exit 2 in 0.05s; SwiftFormat consecutiveSpaces on fixture.
+Mid-run edit, injected loss, and check-written LICENSE: deferred with
+the expected path or loss event, gate exit 0.
+Transient Swift addition: 20/20 deferred, exit 0, 8.30-9.50s;
+FSEvents not started; equal keys and Views NOTE_WRITE in all trials.
+
+Nested XcodeGen output (arm64 Mac, final all-scenario run at b3c742e)
+Before the move, the only root child named by FSEvents in a primed check
+was QuarryMenuBar.xcodeproj; the root vnode reported notes 18. Xcode
+also wrote inside DerivedData, which it did not replace. With output
+under build/xcodegen, both build/ and DerivedData/ were absent in a
+fresh clone: check exit 0 in 27.08s, strict root notes 18, deferred.
+After priming (202ccd3), clean passed 10/10 in 9.18-12.56s with equal
+keys and no vetoes. Transient root Swift addition deferred 20/20 in
+8.86-10.11s, with equal keys and only the root vnode (FSEvents off).
+
+All-scenario run, 380 vnode watches and equal keys in each case:
+  clean                  pass      exit 0   9.43s  no veto
+  broken                 fail      exit 2   0.05s  SwiftFormat consecutiveSpaces
+  broken-xctest          fail      exit 2  17.11s  named ContentPanelTests failure
+  mid-run-edit           deferred  exit 0  10.43s  LICENSE event
+  dropped-events         deferred  exit 0   8.94s  injected loss flags
+  check-writes           deferred  exit 0   9.53s  LICENSE event and write receipt
+  new-swift-source       deferred  exit 0   9.10s  Views vnode, FSEvents off
+  new-root-swift-source  deferred  exit 0   9.34s  root vnode, FSEvents off
+Standalone check passed in 10.96s. Xcode summary: 133 passed, 0 failed,
+1 skipped. With the XCTFail fixture, Xcode exited 65 and xcresult
+confirmed its message, with 132 passed, 1 failed, and 1 skipped.
+
+XcodeGen 2.48.0 --use-cache stored its cache under ~/.xcodegen/cache.
+It regenerated for a changed spec, a source addition/removal and a
+missing project, but reported a cache hit on a modified project.pbxproj.
+Uncached nested generation repaired that stale project and passed all
+the spec, source inventory and missing-project checks.
+
+Real Darwin hook (2026-11-25, arm64 macOS; no parity)
+Quarry: 69971fc0fd6a6860bdeb421ba3dfd8cc4cc7a49b
+Ethos: 772a20fb067df2eb29b41f175c01c3debc73c6c7 (remote restack)
+The VM session acted as the stand-in operator in an interactive TTY
+without Claude Code/OpenCode environment variables. approve-live:
+  Approved swift-default at 4a9c5e339a6ed53e6733a34101dc7c28128d4ec2b15418bebc94b6893bd16b2f
+The live clean check primed the disposable clone before the first hook.
+
+Case             Live make check             Hook         Launches
+clean            pass, exit 0, 24.51s        block, 0.58s        1
+broken           format exit 2, 0.07s        block, 0.42s        1
+broken-xctest    test exit 2, 16.44s          block, 0.33s        1
+The live format check emitted (consecutiveSpaces); the live XCTest
+check named ContentPanelTests.testContentPanelInitializesWhenConnected()
+and reported Xcode exit 65. The hook process exited 0 each time;
+the structured decision was block, not a verification deferral.
+All three had live-verified diagnostic outcomes miss, launched, failed
+and returned the same reason:
+  full-gate: exit status 2
+  swiftformat QuarryMenuBar QuarryMenuBarTests --lint
+
+  make: swiftformat: No such file or directory
+  make: *** [format-check] Error 1
+
+The runner's default gate PATH is /usr/local/bin:/usr/bin:/bin, while
+this Mac provides SwiftFormat, SwiftLint and XcodeGen in /opt/homebrew/bin.
+The policy and gate were left unchanged. The hook did not reach either
+deliberate fixture; passing hook approval does not establish parity.
+
+Real Darwin hook after tool declarations (same runner and Mac)
+Quarry: 24bf2a11bf8fc5fa7bdb463c809689cfb528f431.
+The first three cases used the new sidecar over 69971fc; the last
+case used the committed tree, with no sidecar or check YAML edits.
+The Darwin sidecar puts Xcode and Homebrew binaries on PATH and
+declares the five executables as system.tools. With only the PATH
+and tools declared, clean reached XcodeGen but blocked with
+"Couldn't find current username". Setting USER in the sidecar let
+XcodeGen generate its user data in the ignored project directory.
+The VM stand-in operator approved the final pin in the same TTY setup:
+  Approved swift-default at 59d4f3578196716e8f46f3517a095f8259543f5a8c954df7409ae5707c066bab
+
+Case                  Live make check         Hook                Launches
+clean                 pass, exit 0, 9.54s    pass, 11.51s                1
+broken                format exit 2, 0.04s   block, 0.64s                1
+broken-xctest         test exit 2, 14.36s    deferred, 14.94s            1
+broken-xctest (HEAD)  test exit 2, 14.76s    deferred, 15.60s            1
+
+Clean: hook stdout empty; terminal diagnostic outcome=completed.
+SwiftFormat: decision=block, full-gate: exit status 2, with
+QuarryMenuBarTests/QuarryMenuBarTests.swift and (consecutiveSpaces).
+XCTest: the first hook's result bundle shows the intentional assertion
+failed (132 passed, 1 failed, 1 skipped), but both hooks discarded the
+verdict and reported in systemMessage:
+  handoff checks deferred (full-gate): FSEvents coverage lost or unordered. Run the explicit project gate: (cd ~[redacted-user]/quarry-handoff-evidence/pr89/quarry-live-772a20f && make check)
+
+The runner does not print which callback flag or ordering check caused
+that message. The gate and both watcher vetoes remain unchanged.
+Do not merge on these receipts: real-hook XCTest verdict parity and
+the real-hook mutation scenario have not been shown.
+
+Real Darwin hook with XCTest DerivedData in runner scratch
+Quarry gate/policy: b501e2dcc97595378d21287a1ef49e3673dfea61 files
+over the same disposable replay checkout; runner still 772a20f.
+The VM stand-in operator approved the scratch policy in an interactive TTY:
+  Approved swift-default at 84ff393084a989e1ad0d03914c15e71b237b769400dea5b38ad5a05be26950de
+
+FSEvents control: a separate stream with the runner's flags observed
+6,121 records from the opening sentinel to teardown with DerivedData
+inside the checkout. 6,072 were under DerivedData. No event had flags
+matching the runner's loss mask 0x2f; all 131 adjacent descending IDs
+were in .xcresult paths, e.g. 6077745 -> 6077686 (flags 0x15500,
+DerivedData/Logs/Test/...xcresult/Data/_tmp.BJAyap). The hook deferred.
+With only the test output moved outside, the observer counted 45
+records through closing, zero loss-mask flags and one descending ID
+on a generated Xcode scheme (0x410000); the hook retained the XCTest
+failure. These are observer counts, not the runner's private callback.
+The runner rejects non-monotonic IDs before filtering ignored paths.
+
+Case           Live make check            Hook                         Launches
+clean          pass, exit 0, 13.01s       pass, 31.03s                         1
+broken         format exit 2, 0.06s       block, 0.77s                         1
+broken-xctest  test exit 2, 20.89s        block, 41.41s                        1
+mid-run edit   not a direct comparison    deferred, 34.77s                    1
+
+Clean: empty hook stdout, outcome=completed. SwiftFormat: block,
+exit status 2, fixture path and (consecutiveSpaces). XCTest: block,
+exit status 2, ContentPanelTests.testContentPanelInitializesWhenConnected(),
+** TEST FAILED **, make: *** [test] Error 65.
+Mutation: LICENSE was changed after the single launch and restored
+after the verdict. Hook systemMessage:
+  handoff checks deferred (full-gate): checkout changed during the live-verified check. Run the explicit project gate: (cd ~[redacted-user]/quarry-handoff-evidence/pr89/quarry-live-772a20f && make check)

@@ -1,0 +1,265 @@
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+
+from vnode import CHILD_ENTRY, VnodeUnavailable, VnodeWatch, watch_paths
+
+HERE = Path(__file__).resolve().parent
+ETHOS = Path(os.environ.get("QUARRY_EVIDENCE_ETHOS", Path.home() / "repos/ethos-quarry-evidence"))
+BROKEN_XCTEST = "broken-xctest"
+NEW_SOURCE = "new-swift-source"
+SOURCE_PROBES = {
+    NEW_SOURCE: Path("QuarryMenuBar/Views/QuarryHandoffProbe.swift"),
+    "new-root-swift-source": Path("QuarryRootHandoffProbe.swift"),
+}
+SCENARIOS = ("clean", "broken", BROKEN_XCTEST, "mid-run-edit", "dropped-events", "check-writes", *SOURCE_PROBES)
+EDIT = b"\nquarry live evidence probe\n"
+GAP = 0x0F | 0x20 | 0x40 | 0x80
+BROKEN_SOURCE = Path("QuarryMenuBarTests/QuarryMenuBarTests.swift")
+XCTEST_ANCHOR = b"        XCTAssertNotNil(panel.body)\n"
+XCTEST_FAILURE = b'        XCTFail("Deliberately broken handoff parity probe")\n'
+LICENSE = Path("LICENSE")
+INJECTED_LOSS = 0x01 | 0x04
+
+
+def mutate(path, content):
+    with path.open("ab") as file:
+        file.write(content)
+
+
+def write_probe(path):
+    original = path.stat().st_size
+    try:
+        mutate(path, EDIT)
+        time.sleep(0.3)
+    finally:
+        os.truncate(path, original)
+    print(f"quarry evidence: wrote and restored {path}", flush=True)
+
+
+def git(root, *args):
+    return subprocess.check_output(
+        ["git", "--no-optional-locks", "-C", root, *args], text=True
+    ).strip()
+
+
+def keys(root):
+    output = subprocess.check_output(
+        [HERE / "keys.test", "-test.run", "^TestQuarryLiveTreeKeys$", "-test.v"],
+        cwd=ETHOS / "internal/hook",
+        env={**os.environ, "QUARRY_EVIDENCE_ROOT": str(root)},
+        text=True,
+    )
+    prefix = "QUARRY_TREE_KEYS "
+    return json.loads(next(line[len(prefix):] for line in output.splitlines()
+                           if line.startswith(prefix)))
+
+
+def contains(parent, child):
+    return child == parent or parent in child.parents
+
+
+def decide(root, gitdir, before, after, events, vnode_events, code):
+    keyed = {root / path for path in before["paths"] + after["paths"]}
+    relevant = []
+    for event in events:
+        if event["flags"] == 0x10:  # HistoryDone is a stream marker, not a mutation.
+            continue
+        path = Path(event["path"])
+        if event["flags"] & GAP or contains(gitdir, path) or any(
+            contains(path, source) for source in keyed
+        ):
+            relevant.append(event)
+    if any(event["flags"] & GAP for event in relevant):
+        verdict, reason = "deferred", "FSEvents loss/coverage flag"
+    elif relevant or vnode_events or before != after:
+        verdict, reason = "deferred", "keyed input or Git metadata changed"
+    elif code < 0 or code in {129, 130, 137, 143}:
+        verdict, reason = "deferred", "gate interrupted"
+    elif code == 0:
+        verdict, reason = "pass", "unchanged inputs"
+    else:
+        verdict, reason = "fail", "unchanged inputs"
+    return verdict, reason, relevant
+
+
+def scenario(root, name):
+    try:
+        guarded_scenario(root, name)
+    except VnodeUnavailable as error:
+        result = {
+            "scenario": name, "verdict": "deferred", "reason": str(error),
+            "exit": None, "gate_seconds": None,
+        }
+        (HERE / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")
+        raise SystemExit(f"{name}: deferred: {error} (gate not run)") from None
+
+
+def require_cause(root, name, result, log_path):
+    verdict, code = result["verdict"], result["exit"]
+    fsevents, vnode = result["relevant_events"], result["vnode_events"]
+    if name == "clean":
+        valid = verdict == "pass" and code == 0
+    elif name == "broken":
+        log = log_path.read_text(errors="replace")
+        diagnostic = rf"^{re.escape(str(root / BROKEN_SOURCE))}:\d+:\d+: error: \(consecutiveSpaces\)"
+        valid = verdict == "fail" and code == 2 and (
+            re.search(diagnostic, log, re.MULTILINE) is not None
+            and "Source input did not pass lint check." in log
+        )
+    elif name == BROKEN_XCTEST:
+        log = log_path.read_text(errors="replace")
+        diagnostic = r"^Failing tests:\n\s+ContentPanelTests\.testContentPanelInitializesWhenConnected\(\)$"
+        test_exit = r"^make: \*\*\* \[(?:[^\]\n]*: )?test\] Error 65$"
+        valid = verdict == "fail" and code == 2 and (
+            re.search(diagnostic, log, re.MULTILINE) is not None
+            and re.search(test_exit, log, re.MULTILINE) is not None
+        )
+    elif name == "dropped-events":
+        valid = verdict == "deferred" and code == 0 and any(
+            event["path"] == "<injected>" and event["flags"] == INJECTED_LOSS for event in fsevents
+        )
+    elif name in SOURCE_PROBES:
+        parent = str(root / SOURCE_PROBES[name].parent)
+        valid = verdict == "deferred" and code == 0 and not fsevents and (
+            result["before"] == result["after"]
+            and not any(event["path"] == parent for event in result["preprobe_vnode_events"])
+            and any(event["path"] == parent and event["notes"] & CHILD_ENTRY for event in vnode)
+        )
+    else:
+        target = str(root / LICENSE)
+        valid = verdict == "deferred" and code == 0 and any(
+            event["path"] == target for event in fsevents + vnode
+        )
+        if name == "check-writes":
+            valid = valid and f"quarry evidence: wrote and restored {LICENSE}" in log_path.read_text(
+                errors="replace"
+            )
+    if not valid:
+        raise RuntimeError(f"expected verdict and cause not observed ({name}); see {log_path}")
+
+
+def guarded_scenario(root, name):
+    env = dict(os.environ)
+    for key in ("MAKEFLAGS", "MFLAGS", "MAKEFILES", "GNUMAKEFLAGS"):
+        env.pop(key, None)
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    gitdir = Path(git(root, "rev-parse", "--absolute-git-dir")).resolve(strict=True)
+    if name == "check-writes":
+        env.update(MAKEFILES=str(HERE / "probe.mk"), QUARRY_EVIDENCE_SCRIPT=__file__)
+    log_path = HERE / f"{name}.log"
+    with (HERE / f"{name}.watch.stderr").open("w") as watcher_log, VnodeWatch() as guard:
+        watcher = None if name in SOURCE_PROBES else subprocess.Popen(
+            [HERE / "watch", root, gitdir],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=watcher_log, text=True,
+        )
+        try:
+            if watcher is not None and watcher.stdout.readline().strip() != "ready":
+                raise RuntimeError("failed to start FSEvents")
+            inventory = keys(root)
+            guard.arm(watch_paths(root, inventory["paths"], gitdir))
+            before = keys(root)
+            if inventory != before:
+                raise RuntimeError("deferred: checkout changed while arming vnode watches")
+            start = time.monotonic()
+            preprobe_vnode_events = []
+            with log_path.open("wb") as log:
+                with subprocess.Popen(["make", "check"], cwd=root, env=env,
+                                      stdout=log, stderr=subprocess.STDOUT) as gate:
+                    if name in ("mid-run-edit", "dropped-events", *SOURCE_PROBES):
+                        deadline = start + 45
+                        while b"Running unit tests..." not in log_path.read_bytes():
+                            if gate.poll() is not None or time.monotonic() > deadline:
+                                raise RuntimeError("did not reach Xcode while gate was running")
+                            time.sleep(0.02)
+                        if gate.poll() is not None:
+                            raise RuntimeError("gate already completed before injection")
+                        if name == "mid-run-edit":
+                            write_probe(root / LICENSE)
+                        elif name in SOURCE_PROBES:
+                            preprobe_vnode_events = guard.events()
+                            fixture = root / SOURCE_PROBES[name]
+                            with fixture.open("xb") as source:
+                                try:
+                                    source.write(b"// Live-verified evidence probe.\n")
+                                finally:
+                                    fixture.unlink()
+                        else:
+                            watcher.stdin.write("drop\n")
+                            watcher.stdin.flush()
+                            if watcher.stdout.readline().strip() != "injected":
+                                raise RuntimeError("loss injection was not acknowledged")
+                        if gate.poll() is not None:
+                            raise RuntimeError("gate already completed during injection")
+                    code = gate.wait()
+            elapsed = round(time.monotonic() - start, 2)
+            after = keys(root)
+            events = []
+            if watcher is not None:
+                output, _ = watcher.communicate("finish\n", timeout=15)
+                if watcher.returncode != 0:
+                    raise RuntimeError("FSEvents watcher failed")
+                events = json.loads(output)
+            vnode_events = preprobe_vnode_events + guard.events()
+        finally:
+            if watcher is not None and watcher.poll() is None:
+                watcher.kill()
+                watcher.wait()
+    verdict, reason, relevant = decide(root, gitdir, before, after, events, vnode_events, code)
+    result = {
+        "scenario": name, "verdict": verdict, "reason": reason,
+        "exit": code, "gate_seconds": elapsed, "head": git(root, "rev-parse", "HEAD"),
+        "gitdir": str(gitdir), "before": before, "after": after,
+        "relevant_events": relevant, "vnode_events": vnode_events,
+        "preprobe_vnode_events": preprobe_vnode_events,
+        "vnode_fds": len(guard.paths), "atime_only_vnode_events": guard.atime_only,
+        "ignored_event_count": len(events) - len(relevant),
+    }
+    (HERE / f"{name}.json").write_text(json.dumps(result, indent=2) + "\n")
+    print(f"{name}: {verdict}, exit {code}, {elapsed:.2f}s, "
+          f"FSEvents={len(relevant)}, vnode events={len(vnode_events)}, "
+          f"vnode fds={len(guard.paths)}, atime-only={len(guard.atime_only)}, "
+          f"keys equal={before == after}", flush=True)
+    require_cause(root, name, result, log_path)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "write":
+        write_probe(Path(sys.argv[2]))
+    else:
+        root = Path(sys.argv[1]).resolve(strict=True)
+        clean_verified = False
+        for name in sys.argv[2:] or SCENARIOS:
+            if name not in SCENARIOS:
+                raise ValueError(f"unknown scenario: {name}")
+            if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
+                raise RuntimeError("start from a clean checkout")
+            if name in SOURCE_PROBES and not clean_verified:
+                scenario(root, "clean")
+                clean_verified = True
+            if name in ("broken", BROKEN_XCTEST):
+                path = root / BROKEN_SOURCE
+                original = path.read_bytes()
+                if name == "broken":
+                    fixture = original + b"\nlet   quarryHandoffFormatProbe=0\n"
+                else:
+                    if original.count(XCTEST_ANCHOR) != 1:
+                        raise RuntimeError("expected exactly one XCTest fixture insertion point")
+                    fixture = original.replace(XCTEST_ANCHOR, XCTEST_ANCHOR + XCTEST_FAILURE)
+                try:
+                    path.write_bytes(fixture)
+                    # This deliberately dirty input is setup, before the guarded interval.
+                    time.sleep(0.3)
+                    scenario(root, name)
+                finally:
+                    path.write_bytes(original)
+            else:
+                scenario(root, name)
+                if name == "clean":
+                    clean_verified = True
+            if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
+                raise RuntimeError("checkout was not restored")
