@@ -115,8 +115,10 @@ a verified result.
 
 `new-swift-source` and `new-root-swift-source` run the full gate and create
 and remove a `.swift` file during the test phase, under `QuarryMenuBar/Views`
-and at the checkout root respectively. Neither starts FSEvents. Both require
-equal keys and a child-entry vnode note on the exact parent directory:
+and at the checkout root respectively. Before either probe, the same harness
+invocation must observe a guarded clean pass; it runs that control automatically
+if needed. The probe itself disables FSEvents and requires equal keys, a quiet
+parent until injection, and a child-entry vnode note on that exact parent:
 
 ```bash
 for trial in $(seq 1 20); do

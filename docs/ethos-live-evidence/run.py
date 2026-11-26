@@ -127,6 +127,7 @@ def require_cause(root, name, result, log_path):
         parent = str(root / SOURCE_PROBES[name].parent)
         valid = verdict == "deferred" and code == 0 and not fsevents and (
             result["before"] == result["after"]
+            and not any(event["path"] == parent for event in result["preprobe_vnode_events"])
             and any(event["path"] == parent and event["notes"] & CHILD_ENTRY for event in vnode)
         )
     else:
@@ -165,6 +166,7 @@ def guarded_scenario(root, name):
             if inventory != before:
                 raise RuntimeError("deferred: checkout changed while arming vnode watches")
             start = time.monotonic()
+            preprobe_vnode_events = []
             with log_path.open("wb") as log:
                 with subprocess.Popen(["make", "check"], cwd=root, env=env,
                                       stdout=log, stderr=subprocess.STDOUT) as gate:
@@ -179,6 +181,7 @@ def guarded_scenario(root, name):
                         if name == "mid-run-edit":
                             write_probe(root / LICENSE)
                         elif name in SOURCE_PROBES:
+                            preprobe_vnode_events = guard.events()
                             fixture = root / SOURCE_PROBES[name]
                             with fixture.open("xb") as source:
                                 try:
@@ -201,7 +204,7 @@ def guarded_scenario(root, name):
                 if watcher.returncode != 0:
                     raise RuntimeError("FSEvents watcher failed")
                 events = json.loads(output)
-            vnode_events = guard.events()
+            vnode_events = preprobe_vnode_events + guard.events()
         finally:
             if watcher is not None and watcher.poll() is None:
                 watcher.kill()
@@ -212,6 +215,7 @@ def guarded_scenario(root, name):
         "exit": code, "gate_seconds": elapsed, "head": git(root, "rev-parse", "HEAD"),
         "gitdir": str(gitdir), "before": before, "after": after,
         "relevant_events": relevant, "vnode_events": vnode_events,
+        "preprobe_vnode_events": preprobe_vnode_events,
         "vnode_fds": len(guard.paths), "atime_only_vnode_events": guard.atime_only,
         "ignored_event_count": len(events) - len(relevant),
     }
@@ -228,11 +232,15 @@ if __name__ == "__main__":
         write_probe(Path(sys.argv[2]))
     else:
         root = Path(sys.argv[1]).resolve(strict=True)
+        clean_verified = False
         for name in sys.argv[2:] or SCENARIOS:
             if name not in SCENARIOS:
                 raise ValueError(f"unknown scenario: {name}")
             if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
                 raise RuntimeError("start from a clean checkout")
+            if name in SOURCE_PROBES and not clean_verified:
+                scenario(root, "clean")
+                clean_verified = True
             if name in ("broken", BROKEN_XCTEST):
                 path = root / BROKEN_SOURCE
                 original = path.read_bytes()
@@ -251,5 +259,7 @@ if __name__ == "__main__":
                     path.write_bytes(original)
             else:
                 scenario(root, name)
+                if name == "clean":
+                    clean_verified = True
             if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
                 raise RuntimeError("checkout was not restored")
