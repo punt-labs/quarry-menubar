@@ -193,3 +193,35 @@ The runner does not print which callback flag or ordering check caused
 that message. The gate and both watcher vetoes remain unchanged.
 Do not merge on these receipts: real-hook XCTest verdict parity and
 the real-hook mutation scenario have not been shown.
+
+Real Darwin hook with XCTest DerivedData in runner scratch
+Quarry gate/policy: b501e2dcc97595378d21287a1ef49e3673dfea61 files
+over the same disposable replay checkout; runner still 772a20f.
+The VM stand-in operator approved the scratch policy in an interactive TTY:
+  Approved swift-default at 84ff393084a989e1ad0d03914c15e71b237b769400dea5b38ad5a05be26950de
+
+FSEvents control: a separate stream with the runner's flags observed
+6,121 records from the opening sentinel to teardown with DerivedData
+inside the checkout. 6,072 were under DerivedData. No event had flags
+matching the runner's loss mask 0x2f; all 131 adjacent descending IDs
+were in .xcresult paths, e.g. 6077745 -> 6077686 (flags 0x15500,
+DerivedData/Logs/Test/...xcresult/Data/_tmp.BJAyap). The hook deferred.
+With only the test output moved outside, the observer counted 45
+records through closing, zero loss-mask flags and one descending ID
+on a generated Xcode scheme (0x410000); the hook retained the XCTest
+failure. These are observer counts, not the runner's private callback.
+The runner rejects non-monotonic IDs before filtering ignored paths.
+
+Case           Live make check            Hook                         Launches
+clean          pass, exit 0, 13.01s       pass, 31.03s                         1
+broken         format exit 2, 0.06s       block, 0.77s                         1
+broken-xctest  test exit 2, 20.89s        block, 41.41s                        1
+mid-run edit   not a direct comparison    deferred, 34.77s                    1
+
+Clean: empty hook stdout, outcome=completed. SwiftFormat: block,
+exit status 2, fixture path and (consecutiveSpaces). XCTest: block,
+exit status 2, ContentPanelTests.testContentPanelInitializesWhenConnected(),
+** TEST FAILED **, make: *** [test] Error 65.
+Mutation: LICENSE was changed after the single launch and restored
+after the verdict. Hook systemMessage:
+  handoff checks deferred (full-gate): checkout changed during the live-verified check. Run the explicit project gate: (cd ~[redacted-user]/quarry-handoff-evidence/pr89/quarry-live-772a20f && make check)

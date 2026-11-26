@@ -25,20 +25,22 @@ failure causes differ.
 Use a disposable Quarry clone on an Apple Silicon Mac with Xcode at
 `/Applications/Xcode.app` and the Homebrew SwiftFormat, SwiftLint and
 XcodeGen in `/opt/homebrew/bin`. The sidecar declares these tools and
-sets `USER` for XcodeGen's generated user data. Build the runner from
+sets `USER` for XcodeGen's generated user data. It also puts XCTest's
+DerivedData in the runner's external scratch directory. Build the runner from
 a separate Ethos checkout. The Mac VM session acted as the stand-in
 operator when approving `swift-default`. Use an interactive terminal
 outside Claude Code and OpenCode; read the policy and type `yes` at the
 prompt. Reapprove if either the check YAML or its snapshot sidecar changes.
 
 ```bash
-set -e
 e="$HOME/quarry-handoff-evidence"
 ethos="$e/ethos-darwin"
 quarry="$e/quarry-darwin"
 operator_home="$e/operator-home"
 ethos_ref=772a20fb067df2eb29b41f175c01c3debc73c6c7
-quarry_ref=24bf2a11bf8fc5fa7bdb463c809689cfb528f431
+quarry_ref=b501e2dcc97595378d21287a1ef49e3673dfea61
+(
+set -e
 mkdir -p "$e" "$operator_home"
 git clone --branch devin/1795658354-darwin-worktree-runner \
   https://github.com/punt-labs/ethos.git "$ethos"
@@ -51,6 +53,7 @@ test "$(git -C "$quarry" rev-parse HEAD)" = "$quarry_ref"
 cd "$quarry"
 env -i HOME="$operator_home" PATH="$PATH" TERM="${TERM:-dumb}" \
   "$e/ethos-live" handoff approve-live swift-default
+)
 ```
 
 In the disposable clone, inspect `git diff` after approval and restore
@@ -59,7 +62,12 @@ the ignored output directories with `make check`. Then on each case,
 first run `make check` for the live verdict and invoke the hook:
 
 ```bash
+cd "$quarry"
 case_name=clean  # use broken or broken-xctest for the following replays
+expected=0       # use 2 for either intentional break
+rc=0
+make check || rc=$?
+test "$rc" -eq "$expected" && \
 printf '{"session_id":"replay-%s","agent_id":"replay-agent","agent_type":"claude"}\n' \
   "$case_name" | HOME="$operator_home" CLAUDE_PROJECT_DIR="$quarry" \
   GIT_OPTIONAL_LOCKS=0 "$e/ethos-live" hook subagent-stop
@@ -73,6 +81,50 @@ replay. Count `Check finished` records with `check=full-gate` and
 `outcome=launched` in `$operator_home/.punt-labs/ethos/logs/ethos.log`
 for each invocation; the hook's process exit is not the gate's verdict.
 See [receipts.txt](receipts.txt) for the actual outcomes and timings.
+
+### Real-hook mutation
+
+Use the same approved clone after restoring the test fixture. This probe
+changes only `LICENSE`: the first marker gives the run a fresh cache key,
+and the second is written after Ethos logs the gate launch. Run it only
+in a disposable clone with no pre-existing edits.
+
+```bash
+(
+  set -eo pipefail
+  cd "$quarry"
+  probe=$(mktemp -d "$e/mutation.XXXXXXXX")
+  session="mutation-${probe##*.}"
+  log="$operator_home/.punt-labs/ethos/logs/ethos.log"
+  git --no-optional-locks diff --quiet HEAD -- LICENSE
+  cp LICENSE "$probe/LICENSE"
+  writer=
+  trap 'if [ -n "$writer" ]; then kill "$writer" 2>/dev/null || :; wait "$writer" || :; fi; cp "$probe/LICENSE" LICENSE' EXIT
+  printf '\nopening probe %s\n' "$session" >> LICENSE
+  (
+    for ((i=0; i<300; i++)); do
+      if awk -v id="session_id=$session " \
+        'index($0, id) && /check=full-gate outcome=launched / { found=1 } END { exit !found }' "$log"; then
+        printf '\nmid-run probe %s\n' "$session" >> LICENSE
+        touch "$probe/injected"
+        exit 0
+      fi
+      sleep 0.1
+    done
+    exit 1
+  ) &
+  writer=$!
+  printf '{"session_id":"%s","agent_id":"replay-agent","agent_type":"claude"}\n' "$session" |
+    HOME="$operator_home" CLAUDE_PROJECT_DIR="$quarry" GIT_OPTIONAL_LOCKS=0 \
+      "$e/ethos-live" hook subagent-stop > "$probe/hook.json"
+  wait "$writer"
+  writer=
+  test -f "$probe/injected"
+  jq -e '.systemMessage | startswith("handoff checks deferred (full-gate): checkout changed during the live-verified check.")' \
+    "$probe/hook.json"
+  cat "$probe/hook.json"
+)
+```
 
 ## Historical results before root child-entry watches
 
