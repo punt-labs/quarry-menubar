@@ -162,3 +162,34 @@ The runner's default gate PATH is /usr/local/bin:/usr/bin:/bin, while
 this Mac provides SwiftFormat, SwiftLint and XcodeGen in /opt/homebrew/bin.
 The policy and gate were left unchanged. The hook did not reach either
 deliberate fixture; passing hook approval does not establish parity.
+
+Real Darwin hook after tool declarations (same runner and Mac)
+Quarry: 24bf2a11bf8fc5fa7bdb463c809689cfb528f431.
+The first three cases used the new sidecar over 69971fc; the last
+case used the committed tree, with no sidecar or check YAML edits.
+The Darwin sidecar puts Xcode and Homebrew binaries on PATH and
+declares the five executables as system.tools. With only the PATH
+and tools declared, clean reached XcodeGen but blocked with
+"Couldn't find current username". Setting USER in the sidecar let
+XcodeGen generate its user data in the ignored project directory.
+The VM stand-in operator approved the final pin in the same TTY setup:
+  Approved swift-default at 59d4f3578196716e8f46f3517a095f8259543f5a8c954df7409ae5707c066bab
+
+Case                  Live make check         Hook                Launches
+clean                 pass, exit 0, 9.54s    pass, 11.51s                1
+broken                format exit 2, 0.04s   block, 0.64s                1
+broken-xctest         test exit 2, 14.36s    deferred, 14.94s            1
+broken-xctest (HEAD)  test exit 2, 14.76s    deferred, 15.60s            1
+
+Clean: hook stdout empty; terminal diagnostic outcome=completed.
+SwiftFormat: decision=block, full-gate: exit status 2, with
+QuarryMenuBarTests/QuarryMenuBarTests.swift and (consecutiveSpaces).
+XCTest: the first hook's result bundle shows the intentional assertion
+failed (132 passed, 1 failed, 1 skipped), but both hooks discarded the
+verdict and reported in systemMessage:
+  handoff checks deferred (full-gate): FSEvents coverage lost or unordered. Run the explicit project gate: (cd ~[redacted-user]/quarry-handoff-evidence/pr89/quarry-live-772a20f && make check)
+
+The runner does not print which callback flag or ordering check caused
+that message. The gate and both watcher vetoes remain unchanged.
+Do not merge on these receipts: real-hook XCTest verdict parity and
+the real-hook mutation scenario have not been shown.

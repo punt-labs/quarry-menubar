@@ -15,32 +15,39 @@ bundle is claimed or pinned for live mode; Ethos itself was not changed.
 
 The Python harness models the policy around a direct `make check`.
 The real Darwin hook at Ethos `772a20f` loads and runs the approved
-sidecar, but it does **not** reproduce the live verdicts: its gate
-cannot find SwiftFormat. Before merging, show real-runner parity for
-the clean pass and deliberate failures, plus visible deferral on
-mutations or uncertain coverage. Matching exit codes alone do not
-establish parity if the failure causes differ.
+sidecar. The Python harness results below are not hook results; see
+[receipts.txt](receipts.txt) for the real-hook verdicts and remaining
+merge gate. Matching exit codes alone do not establish parity if the
+failure causes differ.
 
 ## Replay the real Darwin hook
 
-Use a disposable Quarry clone on a Mac and build the runner from a
-separate Ethos checkout. The Mac VM session acted as the stand-in
+Use a disposable Quarry clone on an Apple Silicon Mac with Xcode at
+`/Applications/Xcode.app` and the Homebrew SwiftFormat, SwiftLint and
+XcodeGen in `/opt/homebrew/bin`. The sidecar declares these tools and
+sets `USER` for XcodeGen's generated user data. Build the runner from
+a separate Ethos checkout. The Mac VM session acted as the stand-in
 operator when approving `swift-default`. Use an interactive terminal
 outside Claude Code and OpenCode; read the policy and type `yes` at the
 prompt. Reapprove if either the check YAML or its snapshot sidecar changes.
 
 ```bash
+set -e
 e="$HOME/quarry-handoff-evidence"
 ethos="$e/ethos-darwin"
 quarry="$e/quarry-darwin"
 operator_home="$e/operator-home"
+ethos_ref=772a20fb067df2eb29b41f175c01c3debc73c6c7
+quarry_ref=24bf2a11bf8fc5fa7bdb463c809689cfb528f431
 mkdir -p "$e" "$operator_home"
 git clone --branch devin/1795658354-darwin-worktree-runner \
   https://github.com/punt-labs/ethos.git "$ethos"
-git -C "$ethos" switch --detach 772a20fb067df2eb29b41f175c01c3debc73c6c7
+git -C "$ethos" switch --detach "$ethos_ref"
+test "$(git -C "$ethos" rev-parse HEAD)" = "$ethos_ref"
 go -C "$ethos" build -o "$e/ethos-live" ./cmd/ethos
 git clone https://github.com/punt-labs/quarry-menubar.git "$quarry"
-git -C "$quarry" switch --detach 69971fc0fd6a6860bdeb421ba3dfd8cc4cc7a49b
+git -C "$quarry" switch --detach "$quarry_ref"
+test "$(git -C "$quarry" rev-parse HEAD)" = "$quarry_ref"
 cd "$quarry"
 env -i HOME="$operator_home" PATH="$PATH" TERM="${TERM:-dumb}" \
   "$e/ethos-live" handoff approve-live swift-default
