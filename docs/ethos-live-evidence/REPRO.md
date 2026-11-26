@@ -8,18 +8,64 @@
 
 This is a prototype on the real checkout, not a sandbox or a reusable Ethos
 receipt. The sidecar uses the existing `linux-worktree-v1` profile ID with
-`isolation: live-verified` for the approved Darwin live mode. Ethos still
-needs parser and runner support for this isolation value. No runtime
+`isolation: live-verified` for the approved Darwin live mode. No runtime
 bundle is claimed or pinned for live mode; Ethos itself was not changed.
 
 ## Not proven here
 
-The Python harness models the live-verified policy around a direct
-`make check` invocation. These receipts do not prove that Ethos loads
-the sidecar or dispatches to the Darwin live-verified runner. Before
-merging, use the real Darwin Ethos handoff entry point with the
-supported runner and show parity for a clean pass and deliberate gate
-failure, plus visible deferral on mutations or uncertain coverage.
+The Python harness models the policy around a direct `make check`.
+The real Darwin hook at Ethos `772a20f` loads and runs the approved
+sidecar, but it does **not** reproduce the live verdicts: its gate
+cannot find SwiftFormat. Before merging, show real-runner parity for
+the clean pass and deliberate failures, plus visible deferral on
+mutations or uncertain coverage. Matching exit codes alone do not
+establish parity if the failure causes differ.
+
+## Replay the real Darwin hook
+
+Use a disposable Quarry clone on a Mac and build the runner from a
+separate Ethos checkout. The Mac VM session acted as the stand-in
+operator when approving `swift-default`. Use an interactive terminal
+outside Claude Code and OpenCode; read the policy and type `yes` at the
+prompt. Reapprove if either the check YAML or its snapshot sidecar changes.
+
+```bash
+e="$HOME/quarry-handoff-evidence"
+ethos="$e/ethos-darwin"
+quarry="$e/quarry-darwin"
+operator_home="$e/operator-home"
+mkdir -p "$e" "$operator_home"
+git clone --branch devin/1795658354-darwin-worktree-runner \
+  https://github.com/punt-labs/ethos.git "$ethos"
+git -C "$ethos" switch --detach 772a20fb067df2eb29b41f175c01c3debc73c6c7
+go -C "$ethos" build -o "$e/ethos-live" ./cmd/ethos
+git clone https://github.com/punt-labs/quarry-menubar.git "$quarry"
+git -C "$quarry" switch --detach 69971fc0fd6a6860bdeb421ba3dfd8cc4cc7a49b
+cd "$quarry"
+env -i HOME="$operator_home" PATH="$PATH" TERM="${TERM:-dumb}" \
+  "$e/ethos-live" handoff approve-live swift-default
+```
+
+In the disposable clone, inspect `git diff` after approval and restore
+only any bootstrap-generated `.gitignore` edit before measuring. Prime
+the ignored output directories with `make check`. Then on each case,
+first run `make check` for the live verdict and invoke the hook:
+
+```bash
+case_name=clean  # use broken or broken-xctest for the following replays
+printf '{"session_id":"replay-%s","agent_id":"replay-agent","agent_type":"claude"}\n' \
+  "$case_name" | HOME="$operator_home" CLAUDE_PROJECT_DIR="$quarry" \
+  GIT_OPTIONAL_LOCKS=0 "$e/ethos-live" hook subagent-stop
+```
+
+For `broken`, append `let   quarryHandoffFormatProbe=0` on a new line
+in `QuarryMenuBarTests/QuarryMenuBarTests.swift`. Restore the file, then for
+`broken-xctest`, append `XCTFail("Deliberately broken handoff parity probe")`
+after `XCTAssertNotNil(panel.body)` in that file. Restore it again after the
+replay. Count `Check finished` records with `check=full-gate` and
+`outcome=launched` in `$operator_home/.punt-labs/ethos/logs/ethos.log`
+for each invocation; the hook's process exit is not the gate's verdict.
+See [receipts.txt](receipts.txt) for the actual outcomes and timings.
 
 ## Historical results before root child-entry watches
 
