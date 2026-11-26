@@ -10,6 +10,7 @@ checks:
       - /Applications/Xcode.app/Contents/Developer/usr/bin
       - /opt/homebrew/bin
     env:
+      TEST_DERIVED_DATA: "{scratch}/DerivedData"
       USER: ethos
     system:
       tools: [make, swiftformat, swiftlint, xcodebuild, xcodegen]

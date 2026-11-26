@@ -4,6 +4,7 @@
 SCHEME = QuarryMenuBar
 DESTINATION = platform=macOS
 DERIVED_DATA = ./DerivedData
+TEST_DERIVED_DATA ?= $(DERIVED_DATA)
 PROJECT_DIR = build/xcodegen
 PROJECT = $(PROJECT_DIR)/$(SCHEME).xcodeproj
 
@@ -76,7 +77,7 @@ test: generate
 		-project "$(PROJECT)" \
 		-scheme $(SCHEME) \
 		-destination '$(DESTINATION)' \
-		-derivedDataPath $(DERIVED_DATA) \
+		-derivedDataPath "$(TEST_DERIVED_DATA)" \
 		-only-testing:QuarryMenuBarTests \
 		-quiet
 
