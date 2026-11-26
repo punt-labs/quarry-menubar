@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -12,6 +13,9 @@ ETHOS = Path(os.environ.get("QUARRY_EVIDENCE_ETHOS", Path.home() / "repos/ethos-
 SCENARIOS = ("clean", "broken", "mid-run-edit", "dropped-events", "check-writes")
 EDIT = b"\nquarry live evidence probe\n"
 GAP = 0x0F | 0x20 | 0x40 | 0x80
+BROKEN_SOURCE = Path("QuarryMenuBarTests/QuarryMenuBarTests.swift")
+LICENSE = Path("LICENSE")
+INJECTED_LOSS = 0x01 | 0x04
 
 
 def mutate(path, content):
@@ -87,6 +91,35 @@ def scenario(root, name):
         raise SystemExit(f"{name}: deferred: {error} (gate not run)") from None
 
 
+def require_cause(root, name, result, log_path):
+    verdict, code = result["verdict"], result["exit"]
+    fsevents, vnode = result["relevant_events"], result["vnode_events"]
+    if name == "clean":
+        valid = verdict == "pass" and code == 0
+    elif name == "broken":
+        log = log_path.read_text(errors="replace")
+        diagnostic = rf"^{re.escape(str(root / BROKEN_SOURCE))}:\d+:\d+: error: \(consecutiveSpaces\)"
+        valid = verdict == "fail" and code == 2 and (
+            re.search(diagnostic, log, re.MULTILINE) is not None
+            and "Source input did not pass lint check." in log
+        )
+    elif name == "dropped-events":
+        valid = verdict == "deferred" and code == 0 and any(
+            event["path"] == "<injected>" and event["flags"] == INJECTED_LOSS for event in fsevents
+        )
+    else:
+        target = str(root / LICENSE)
+        valid = verdict == "deferred" and code == 0 and any(
+            event["path"] == target for event in fsevents + vnode
+        )
+        if name == "check-writes":
+            valid = valid and f"quarry evidence: wrote and restored {LICENSE}" in log_path.read_text(
+                errors="replace"
+            )
+    if not valid:
+        raise RuntimeError(f"expected verdict and cause not observed ({name}); see {log_path}")
+
+
 def guarded_scenario(root, name):
     env = dict(os.environ)
     for key in ("MAKEFLAGS", "MFLAGS", "MAKEFILES", "GNUMAKEFLAGS"):
@@ -122,7 +155,7 @@ def guarded_scenario(root, name):
                         if gate.poll() is not None:
                             raise RuntimeError("gate already completed before injection")
                         if name == "mid-run-edit":
-                            write_probe(root / "LICENSE")
+                            write_probe(root / LICENSE)
                         else:
                             watcher.stdin.write("drop\n")
                             watcher.stdin.flush()
@@ -156,9 +189,7 @@ def guarded_scenario(root, name):
           f"FSEvents={len(relevant)}, vnode events={len(vnode_events)}, "
           f"vnode fds={len(guard.paths)}, atime-only={len(guard.atime_only)}, "
           f"keys equal={before == after}", flush=True)
-    expected = {"clean": "pass", "broken": "fail"}.get(name, "deferred")
-    if verdict != expected or (name != "broken" and code != 0):
-        raise RuntimeError(f"expected {expected} ({name}); see {log_path}")
+    require_cause(root, name, result, log_path)
 
 
 if __name__ == "__main__":
@@ -172,7 +203,7 @@ if __name__ == "__main__":
             if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
                 raise RuntimeError("start from a clean checkout")
             if name == "broken":
-                path = root / "QuarryMenuBarTests/QuarryMenuBarTests.swift"
+                path = root / BROKEN_SOURCE
                 size = path.stat().st_size
                 try:
                     mutate(path, b"\nlet   quarryHandoffFormatProbe=0\n")
