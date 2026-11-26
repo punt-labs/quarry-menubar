@@ -47,7 +47,14 @@ make all         # generate + format + lint + build + test
 make clean       # Remove DerivedData
 ```
 
-Single test file (after `make generate`): `xcodebuild test -project build/xcodegen/QuarryMenuBar.xcodeproj -scheme QuarryMenuBar -destination 'platform=macOS' -only-testing:QuarryMenuBarTests/QuarryClientTests`
+Run a single test file from the repository root:
+
+```bash
+make generate
+xcodebuild test -project build/xcodegen/QuarryMenuBar.xcodeproj \
+  -scheme QuarryMenuBar -destination 'platform=macOS' \
+  -only-testing:QuarryMenuBarTests/QuarryClientTests
+```
 
 Quality gates before every commit: `make check`. Use `make format` to fix
 formatting explicitly; the gate does not rewrite source.

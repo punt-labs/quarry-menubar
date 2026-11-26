@@ -11,8 +11,10 @@ import XCTest
 /// the launching shell's environment, so a marker file is the reliable opt-in).
 /// Run with:
 ///
+///     make generate
 ///     touch ~/.qmb-live-integration
-///     xcodebuild test -scheme QuarryMenuBar -destination 'platform=macOS' \
+///     xcodebuild test -project build/xcodegen/QuarryMenuBar.xcodeproj \
+///       -scheme QuarryMenuBar -destination 'platform=macOS' \
 ///       -only-testing:QuarryMenuBarTests/LiveDaemonIntegrationTests
 ///     rm ~/.qmb-live-integration
 ///
