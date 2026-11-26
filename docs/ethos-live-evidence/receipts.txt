@@ -225,3 +225,31 @@ exit status 2, ContentPanelTests.testContentPanelInitializesWhenConnected(),
 Mutation: LICENSE was changed after the single launch and restored
 after the verdict. Hook systemMessage:
   handoff checks deferred (full-gate): checkout changed during the live-verified check. Run the explicit project gate: (cd ~[redacted-user]/quarry-handoff-evidence/pr89/quarry-live-772a20f && make check)
+
+Exact-head Darwin replay after Quarry PR #89 merged
+Quarry origin/main: d4679be57513a7722318185d108d305702b89758
+Ethos devin/1795658354-darwin-worktree-runner:
+  4c246062490ab201d0666a20bd2742eb0df5bd37
+Mac arm64, Xcode 26.6 (17F113), /Applications/Xcode.app/Contents/Developer.
+All four verdict records reported the same developer_fingerprint:
+  2cbf058ee2e7e6490f8d0d50045e522626743ececfa4606634f41a6076200528
+The VM session acted as the stand-in operator in an interactive TTY:
+  Approved swift-default at 84ff393084a989e1ad0d03914c15e71b237b769400dea5b38ad5a05be26950de
+Porcelain status was empty after approval and before and after each
+hook, except for that case's deliberate fixture. It was empty again
+after each fixture was restored. The legacy sessions ignore rule
+stayed in the committed .gitignore; the hook did not rewrite it.
+
+Case           Live make check          Hook                     Launches
+clean          pass, exit 0, 10.50s     pass, 20.63s                     1
+broken         format exit 2, 0.05s     block, 0.77s                     1
+broken-xctest  test exit 2, 16.19s       block, 28.40s                    1
+mid-run edit   not a direct comparison  deferred, 23.07s                 1
+
+Clean: empty hook stdout, outcome=completed. SwiftFormat: block,
+full-gate: exit status 2; QuarryMenuBarTests.swift:94:1 (consecutiveSpaces).
+XCTest: block, full-gate: exit status 2;
+ContentPanelTests.testContentPanelInitializesWhenConnected(),
+make: *** [test] Error 65. Mutation: LICENSE was edited after the
+launch record and left changed until the hook returned. Hook systemMessage:
+  handoff checks deferred (full-gate): checkout changed (key mismatch) during the live-verified check at "LICENSE". Run the explicit project gate: (cd ~[redacted-user]/repos/quarry-menubar && make check)
