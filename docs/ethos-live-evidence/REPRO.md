@@ -55,10 +55,12 @@ git clone https://github.com/punt-labs/quarry-menubar.git "$quarry"
 git -C "$quarry" switch --detach "$quarry_ref"
 test "$(git -C "$quarry" rev-parse HEAD)" = "$quarry_ref"
 cd "$quarry"
-test -z "$(git --no-optional-locks status --porcelain)"
+status=$(git --no-optional-locks status --porcelain)
+test -z "$status"
 env -i HOME="$operator_home" PATH="$PATH" TERM="${TERM:-dumb}" \
   "$e/ethos-live" handoff approve-live swift-default
-test -z "$(git --no-optional-locks status --porcelain)"
+status=$(git --no-optional-locks status --porcelain)
+test -z "$status"
 )
 ```
 
@@ -106,12 +108,14 @@ in a disposable clone with no pre-existing edits.
   probe=$(mktemp -d "$e/mutation.XXXXXXXX")
   session="mutation-${probe##*.}"
   log="$operator_home/.punt-labs/ethos/logs/ethos.log"
-  test -z "$(git --no-optional-locks status --porcelain)"
+  status=$(git --no-optional-locks status --porcelain)
+  test -z "$status"
   cp LICENSE "$probe/LICENSE"
   writer=
   trap 'if [ -n "$writer" ]; then kill "$writer" 2>/dev/null || :; wait "$writer" || :; fi; cp "$probe/LICENSE" LICENSE' EXIT
   printf '\nopening probe %s\n' "$session" >> LICENSE
-  test "$(git --no-optional-locks status --porcelain)" = ' M LICENSE'
+  status=$(git --no-optional-locks status --porcelain)
+  test "$status" = ' M LICENSE'
   (
     for ((i=0; i<300; i++)); do
       if awk -v id="session_id=$session " \
@@ -131,10 +135,12 @@ in a disposable clone with no pre-existing edits.
   wait "$writer"
   writer=
   test -f "$probe/injected"
-  test "$(git --no-optional-locks status --porcelain)" = ' M LICENSE'
+  status=$(git --no-optional-locks status --porcelain)
+  test "$status" = ' M LICENSE'
   cp "$probe/LICENSE" LICENSE
   trap - EXIT
-  test -z "$(git --no-optional-locks status --porcelain)"
+  status=$(git --no-optional-locks status --porcelain)
+  test -z "$status"
   jq -e '.systemMessage | startswith("handoff checks deferred (full-gate): checkout changed (key mismatch) during the live-verified check at \"LICENSE\".")' \
     "$probe/hook.json"
   cat "$probe/hook.json"
