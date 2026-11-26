@@ -1,0 +1,7 @@
+# DES-086 live-verified profile; requires Ethos runner support.
+checks:
+  full-gate:
+    profile: linux-worktree-v1
+    isolation: live-verified
+    epoch: quarry-live-v1
+    sources: {mode: worktree}
