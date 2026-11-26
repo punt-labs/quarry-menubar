@@ -410,27 +410,6 @@ The app follows Quarry's active connection. For local testing, install Quarry an
 cd ../quarry && uv tool install --force .
 ```
 
-## Ethos & Delegation
-
-Identity: `agent: claude` per `.punt-labs/ethos.yaml`. Sub-agent calls (`Agent(subagent_type=…)`) match ethos identity handles.
-
-quarry-menubar is a native macOS Swift/SwiftUI menu-bar app that follows Quarry's connection model and renders results. Three concerns: (1) Swift/SwiftUI implementation discipline (XcodeGen, SwiftFormat/Lint, @Observable MVVM); (2) the HTTP(S) integration with Quarry (connection resolution, TLS/auth, current endpoint contracts); (3) macOS-specific surface (menu bar, hotkeys, Dock-less UIElement, local-vs-remote capability gating). Within each row, the worker and evaluator must be distinct handles. Claude is the leader, never the evaluator.
-
-| Task type | Worker | Evaluator |
-|-----------|--------|-----------|
-| Swift/SwiftUI view code, MVVM, @Observable | `csl` (Lattner) | `srn` (Naroff) |
-| Concurrency, Sendable, @MainActor boundaries | `srn` | `csl` |
-| XcodeGen `project.yml`, build settings, schemes | `csl` | `adb` (Lovelace) |
-| SwiftFormat / SwiftLint config alignment | `csl` | `mdm` (Pike) |
-| Connection resolution / config parsing / state | `srn` | `rmh` (Hettinger) |
-| HTTP client / Codable / TLS/auth contract with quarry | `srn` | `rmh` (Hettinger) |
-| Hotkey / NSEvent monitor / global accessibility | `srn` | `dna` (Norman) |
-| Visual / menu-bar UX / search panel layout | `dna` | `edt` (Tufte) |
-| Syntax highlighting / `AttributedString` rendering | `csl` | `dna` |
-| Cross-repo coordination with `quarry` HTTP API | `srn` | `rmh` |
-
-Use the `standard` pipeline for new views, new endpoints, or connection-model changes. Use `quick` for SwiftLint fixes or single-file refactors. The "Live demo" Pre-PR check is non-negotiable — every feature must be exercised against a real Quarry connection before review.
-
 ## Scratch Files
 
 Use `.tmp/` at the project root for scratch and temporary files — never `/tmp`. The `TMPDIR` environment variable is set via `.envrc` so that `tempfile` and subprocesses automatically use it. Contents are gitignored; only `.gitkeep` is tracked.
