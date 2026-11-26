@@ -16,7 +16,8 @@ bundle is claimed or pinned for live mode; Ethos itself was not changed.
 The Python harness models the policy around a direct `make check`.
 Real-hook parity was verified on Ethos
 `devin/1795658354-darwin-worktree-runner` at
-`772a20fb067df2eb29b41f175c01c3debc73c6c7`; contributors need an
+`4c246062490ab201d0666a20bd2742eb0df5bd37` against merged Quarry PR #89
+(`d4679be57513a7722318185d108d305702b89758`); contributors need an
 Ethos release containing the Darwin live-verified slice. Released
 Ethos v5.2.3 ignores the sidecar and runs the existing live gate without
 verification; the earlier sidecar-aware build `c837cd1` rejected it.
@@ -25,7 +26,8 @@ exit codes alone do not establish parity if the failure causes differ.
 
 ## Replay the real Darwin hook
 
-Use a disposable Quarry clone on an Apple Silicon Mac with Xcode at
+Run the replay commands in Bash. Use a disposable Quarry clone on an
+Apple Silicon Mac with Xcode at
 `/Applications/Xcode.app` and the Homebrew SwiftFormat, SwiftLint and
 XcodeGen in `/opt/homebrew/bin`. The sidecar declares these tools and
 sets `USER` for XcodeGen's generated user data. It also puts XCTest's
@@ -40,8 +42,8 @@ e="$HOME/quarry-handoff-evidence"
 ethos="$e/ethos-darwin"
 quarry="$e/quarry-darwin"
 operator_home="$e/operator-home"
-ethos_ref=772a20fb067df2eb29b41f175c01c3debc73c6c7
-quarry_ref=b501e2dcc97595378d21287a1ef49e3673dfea61
+ethos_ref=4c246062490ab201d0666a20bd2742eb0df5bd37
+quarry_ref=d4679be57513a7722318185d108d305702b89758
 (
 set -e
 mkdir -p "$e" "$operator_home"
@@ -54,14 +56,21 @@ git clone https://github.com/punt-labs/quarry-menubar.git "$quarry"
 git -C "$quarry" switch --detach "$quarry_ref"
 test "$(git -C "$quarry" rev-parse HEAD)" = "$quarry_ref"
 cd "$quarry"
+tree_status=$(git --no-optional-locks status --porcelain)
+test -z "$tree_status"
 env -i HOME="$operator_home" PATH="$PATH" TERM="${TERM:-dumb}" \
   "$e/ethos-live" handoff approve-live swift-default
+tree_status=$(git --no-optional-locks status --porcelain)
+test -z "$tree_status"
 )
 ```
 
-In the disposable clone, inspect `git diff` after approval and restore
-only any bootstrap-generated `.gitignore` edit before measuring. Prime
-the ignored output directories with `make check`. Then on each case,
+Prime the disposable clone's ignored output directories with `make check`.
+Before and after each hook invocation, require empty
+`git --no-optional-locks status --porcelain` output for clean, or only the
+deliberate fixture edit for a broken case. Compare the fixture contents too.
+Restore the fixture and check for an empty status again before continuing.
+Do not accept a hook-induced write to a tracked file. Then on each case,
 first run `make check` for the live verdict and invoke the hook:
 
 ```bash
@@ -82,7 +91,8 @@ in `QuarryMenuBarTests/QuarryMenuBarTests.swift`. Restore the file, then for
 after `XCTAssertNotNil(panel.body)` in that file. Restore it again after the
 replay. Count `Check finished` records with `check=full-gate` and
 `outcome=launched` in `$operator_home/.punt-labs/ethos/logs/ethos.log`
-for each invocation; the hook's process exit is not the gate's verdict.
+for each invocation and record `developer_fingerprint` from its verdict
+record. The hook's process exit is not the gate's verdict.
 See [receipts.txt](receipts.txt) for the actual outcomes and timings.
 
 ### Real-hook mutation
@@ -99,11 +109,14 @@ in a disposable clone with no pre-existing edits.
   probe=$(mktemp -d "$e/mutation.XXXXXXXX")
   session="mutation-${probe##*.}"
   log="$operator_home/.punt-labs/ethos/logs/ethos.log"
-  git --no-optional-locks diff --quiet HEAD -- LICENSE
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test -z "$tree_status"
   cp LICENSE "$probe/LICENSE"
   writer=
   trap 'if [ -n "$writer" ]; then kill "$writer" 2>/dev/null || :; wait "$writer" || :; fi; cp "$probe/LICENSE" LICENSE' EXIT
   printf '\nopening probe %s\n' "$session" >> LICENSE
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test "$tree_status" = ' M LICENSE'
   (
     for ((i=0; i<300; i++)); do
       if awk -v id="session_id=$session " \
@@ -123,7 +136,16 @@ in a disposable clone with no pre-existing edits.
   wait "$writer"
   writer=
   test -f "$probe/injected"
-  jq -e '.systemMessage | startswith("handoff checks deferred (full-gate): checkout changed during the live-verified check.")' \
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test "$tree_status" = ' M LICENSE'
+  cp "$probe/LICENSE" "$probe/expected"
+  printf '\nopening probe %s\n\nmid-run probe %s\n' "$session" "$session" >> "$probe/expected"
+  cmp "$probe/expected" LICENSE
+  cp "$probe/LICENSE" LICENSE
+  trap - EXIT
+  tree_status=$(git --no-optional-locks status --porcelain)
+  test -z "$tree_status"
+  jq -e '.systemMessage | startswith("handoff checks deferred (full-gate): checkout changed (key mismatch) during the live-verified check at \"LICENSE\".")' \
     "$probe/hook.json"
   cat "$probe/hook.json"
 )
@@ -257,9 +279,9 @@ null gate exit and time in the JSON receipt.
 To reproduce the budget deferral with the same checkout and harness:
 
 ```bash
-status=0
-(ulimit -Sn 256 && python3 "$e/run.py" "$quarry" clean) || status=$?
-test "$status" -eq 1
+probe_exit=0
+(ulimit -Sn 256 && python3 "$e/run.py" "$quarry" clean) || probe_exit=$?
+test "$probe_exit" -eq 1
 jq -e '.verdict == "deferred" and .reason == "keyed set too large for vnode guard"
        and .exit == null and .gate_seconds == null' "$e/clean.json"
 ```
