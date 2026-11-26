@@ -133,3 +133,32 @@ It regenerated for a changed spec, a source addition/removal and a
 missing project, but reported a cache hit on a modified project.pbxproj.
 Uncached nested generation repaired that stale project and passed all
 the spec, source inventory and missing-project checks.
+
+Real Darwin hook (2026-11-25, arm64 macOS; no parity)
+Quarry: 69971fc0fd6a6860bdeb421ba3dfd8cc4cc7a49b
+Ethos: 772a20fb067df2eb29b41f175c01c3debc73c6c7 (remote restack)
+The VM session acted as the stand-in operator in an interactive TTY
+without Claude Code/OpenCode environment variables. approve-live:
+  Approved swift-default at 4a9c5e339a6ed53e6733a34101dc7c28128d4ec2b15418bebc94b6893bd16b2f
+The live clean check primed the disposable clone before the first hook.
+
+Case             Live make check             Hook         Launches
+clean            pass, exit 0, 24.51s        block, 0.58s        1
+broken           format exit 2, 0.07s        block, 0.42s        1
+broken-xctest    test exit 2, 16.44s          block, 0.33s        1
+The live format check emitted (consecutiveSpaces); the live XCTest
+check named ContentPanelTests.testContentPanelInitializesWhenConnected()
+and reported Xcode exit 65. The hook process exited 0 each time;
+the structured decision was block, not a verification deferral.
+All three had live-verified diagnostic outcomes miss, launched, failed
+and returned the same reason:
+  full-gate: exit status 2
+  swiftformat QuarryMenuBar QuarryMenuBarTests --lint
+
+  make: swiftformat: No such file or directory
+  make: *** [format-check] Error 1
+
+The runner's default gate PATH is /usr/local/bin:/usr/bin:/bin, while
+this Mac provides SwiftFormat, SwiftLint and XcodeGen in /opt/homebrew/bin.
+The policy and gate were left unchanged. The hook did not reach either
+deliberate fixture; passing hook approval does not establish parity.
