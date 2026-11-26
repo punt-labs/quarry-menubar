@@ -161,3 +161,27 @@ def guarded_scenario(root, name):
         raise RuntimeError(f"expected {expected} ({name}); see {log_path}")
 
 
+if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "write":
+        write_probe(Path(sys.argv[2]))
+    else:
+        root = Path(sys.argv[1]).resolve(strict=True)
+        for name in sys.argv[2:] or SCENARIOS:
+            if name not in SCENARIOS:
+                raise ValueError(f"unknown scenario: {name}")
+            if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
+                raise RuntimeError("start from a clean checkout")
+            if name == "broken":
+                path = root / "QuarryMenuBarTests/QuarryMenuBarTests.swift"
+                size = path.stat().st_size
+                try:
+                    mutate(path, b"\nlet   quarryHandoffFormatProbe=0\n")
+                    # This deliberately dirty input is setup, before the guarded interval.
+                    time.sleep(0.3)
+                    scenario(root, name)
+                finally:
+                    os.truncate(path, size)
+            else:
+                scenario(root, name)
+            if git(root, "status", "--porcelain=v1", "--untracked-files=all"):
+                raise RuntimeError("checkout was not restored")
