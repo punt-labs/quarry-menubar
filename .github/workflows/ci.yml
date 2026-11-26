@@ -44,7 +44,7 @@ jobs:
         run: brew list xcodegen &>/dev/null && brew link --overwrite xcodegen || brew install xcodegen
 
       - name: Generate Xcode Project
-        run: xcodegen generate
+        run: make generate
 
       - name: Cache DerivedData
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -57,6 +57,7 @@ jobs:
       - name: Build
         run: |
           xcodebuild build \
+            -project build/xcodegen/QuarryMenuBar.xcodeproj \
             -scheme QuarryMenuBar \
             -destination 'platform=macOS' \
             -derivedDataPath .deriveddata \
@@ -66,6 +67,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test \
+            -project build/xcodegen/QuarryMenuBar.xcodeproj \
             -scheme QuarryMenuBar \
             -destination 'platform=macOS' \
             -derivedDataPath .deriveddata \
